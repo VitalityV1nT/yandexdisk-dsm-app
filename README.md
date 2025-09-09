@@ -56,12 +56,12 @@
   
    - Авторизуйтесь в браузере, где выполнен вход в Яндекс.Диск 
    
-   - Укажите путь к директории для синхронизации:
+   - Укажите путь к директории для синхронизации (оберните путь в кавычки если есть пробелы):
    ```bash
-     Enter path to Yandex.Disk folder (Leave empty to use default folder '/var/packages/YandexDisk/home/Yandex.Disk'): /volume1/yandexsync
+     Enter path to Yandex.Disk folder (Leave empty to use default folder '/var/packages/YandexDisk/home/Yandex.Disk'): "/volume1/yandex sync"
    ```
    
-   - Не создавайте демон автозапуска:
+   - Не создавайте демон автозапуска (DSM самостоятельно управляет службами и обеспечит автозапуск):
    ```bash
      Would you like Yandex.Disk to launch on startup? [Y/n]: n
    ```
