@@ -3,22 +3,24 @@
 Интеграция официального [Консольного клиента Яндекс Диск для Linux](https://yandex.ru/support/yandex-360/customers/disk/desktop/linux/ru/) в Synology DSM.  
 Авторизация и синхронизация выполняются через оригинальную утилиту `yandex-disk` адаптированную для использования в среде Synology DSM.  
 
-### 🖼 Интерфейс
+## 🖼 Интерфейс
 <p align="center">
   <img width="48%" alt="status" src="https://github.com/user-attachments/assets/0eb2f74b-d614-423b-973c-418b881b7947" />
   <img width="48%" alt="log" src="https://github.com/user-attachments/assets/fe684ab1-3751-4887-94b1-5c6aeb1cbda2" />
 </p>
 
-### 🔧 Возможности
+## 🚀 Возможности
 - Простая установка как `.spk`-пакет
 - Первоначальная настройка через SSH
 - Графический интерфейс с возможностью:
    - Отображения статуса Yandex Disk
    - Логирования состояния
    - Очистки логов
----
-### ⚠️ Установка только на **x86_64** устройства с DSM 7
-### ⚠️ ВНИМАТЕЛЬНО ОЗНАКОМЬТЕСЬ ПЕРЕД УСТАНОВКОЙ ПАКЕТА 
+ 
+## 📋 Требования
+- DSM **7.x**  
+- Устройства **x86_64**  
+- Доступ по **SSH** для первоначальной настройки
 
 ---
 
@@ -76,5 +78,9 @@
    - Проверьте статус и лог в приложении
 
 ---
+### 🐞 Обратная связь
+Связаться можно [в комментариях на YouTube](https://youtu.be/KB_YwQbxSW8) или в [Issue](https://github.com/VitalityV1nT/yandexdisk-dsm-app/issues).
 
-#### 🙏 Проект вдохновлён инструкцией от Александра Linux: [Установка WireGuard на Synology NAS](https://bafista.ru/ustanovka-wireguard-na-synology-nas-v-dsm-7-i-dsm-6/)
+---
+### 🙏 Благодарности
+Проект вдохновлён инструкцией от Александра Linux: [Установка WireGuard на Synology NAS](https://bafista.ru/ustanovka-wireguard-na-synology-nas-v-dsm-7-i-dsm-6/)
