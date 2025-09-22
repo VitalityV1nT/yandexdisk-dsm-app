@@ -1,6 +1,6 @@
 package="YandexDisk"
 displayname="Yandex Disk"
-version="0.1.6.1080-2"
+version="0.1.6.1080-3"
 os_min_ver="7.0-40000"
 maintainer="VitalityV1nT"
 maintainer_url="https://github.com/VitalityV1nT"

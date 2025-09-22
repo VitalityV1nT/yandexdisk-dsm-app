@@ -1,17 +1,20 @@
 #!/bin/sh
 
 DAEMON="/usr/local/bin/yandex-disk"
-LOGGER="/var/packages/YandexDisk/scripts/yandexdisk_logger.sh"
+LOGGER="/var/packages/YandexDisk/scripts/yandex-logger"
+CLEANER="/var/packages/YandexDisk/scripts/yandex-cleaner"
 
 case "$1" in
     start)
 		$DAEMON start
-        "$LOGGER" &
+		$LOGGER &
+		$CLEANER &
 		exit 0
         ;;
     stop)
 		$DAEMON stop
-        pkill yandexdisk_logger.sh
+		pkill -f yandex-logger
+		pkill -f yandex-cleaner
 		exit 0
         ;;
     status)
