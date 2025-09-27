@@ -78,6 +78,10 @@
    - Проверьте статус и лог в приложении
 
 ---
+### Исключаем некоторые директории из синхронизации (опционально)  
+   [🎥 Видео-инструкция на Youtube](https://youtu.be/g0zbFXbrKWA)
+
+---
 ### 🐞 Обратная связь
 Связаться можно [в комментариях на YouTube](https://youtu.be/KB_YwQbxSW8) или в [Issue](https://github.com/VitalityV1nT/yandexdisk-dsm-app/issues).
 
