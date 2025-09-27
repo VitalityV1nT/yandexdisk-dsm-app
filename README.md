@@ -94,9 +94,9 @@
    Чтобы настройка действовала корректно, названия исключаемых директорий нужно перечислять через запятую, без пробелов.
 
 ---
-### 🐞 Обратная связь
+## 🐞 Обратная связь
 Связаться можно [в комментариях на YouTube](https://youtu.be/KB_YwQbxSW8) или в [Issue](https://github.com/VitalityV1nT/yandexdisk-dsm-app/issues).
 
 ---
-### 🙏 Благодарности
+## 🙏 Благодарности
 Проект вдохновлён инструкцией от Александра Linux: [Установка WireGuard на Synology NAS](https://bafista.ru/ustanovka-wireguard-na-synology-nas-v-dsm-7-i-dsm-6/)
