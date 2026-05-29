@@ -6,7 +6,7 @@ CONFIG_FILE="/var/packages/YandexDisk/home/.config/yandex-disk/config.cfg"
 CLEAN_INTERVAL=3600
 
 while true; do
-    TARGET_DIR=$(grep -Ei '^dir=' "$CONFIG_FILE" | cut -d'=' -f2- | tr -d '"')
+    TARGET_DIR=$(grep -Ei '^[[:space:]]*dir[[:space:]]*=' "$CONFIG_FILE" | head -1 | cut -d'=' -f2- | sed -e 's/[[:space:]]\{1,\}#.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '"')
 
     if [ -n "$TARGET_DIR" ]; then
         find "$TARGET_DIR" -type d -name "@eaDir" -prune -exec rm -rf {} +

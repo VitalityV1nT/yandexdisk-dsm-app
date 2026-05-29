@@ -1,29 +1,30 @@
 #!/bin/sh
-# yandex-disk — ARM64 compatibility wrapper.
+# yandex-disk — ARM64 compatibility wrapper (rclone engine).
 #
-# The official `yandex-disk` CLI has no ARM build, so on aarch64 Synology models
-# (DS124 / RTD1619B and similar) this wrapper provides the same start|stop|status
-# control surface the package and its DSM UI rely on, implemented on top of the
-# native arm64 `rclone` engine using the built-in Yandex Disk backend (`bisync`,
-# i.e. two-way sync — the closest analogue of the original daemon).
+# The official yandex-disk CLI has no ARM build; this wraps the native arm64 rclone
+# (Yandex Disk backend, two-way bisync).
 #
-# Subcommands: start | stop | status | sync | setup | version | rclone <args...>
+# NO resident sync daemon: on DSM 7 a backgrounded shell loop is unreliable under
+# systemd (gets reaped, leaves bisync locks, package flips to "stopped"). Periodic
+# sync is configured as a DSM Task Scheduler job that runs:
+#       sudo -u sc-yandexdisk /var/packages/YandexDisk/target/yandex-disk sync
+#
+# Subcommands: sync | status | setup | version | rclone <args...>
 
 set -u
 
-# --- Paths (overridable via env for local testing) -------------------------
 PKG_DIR="${YD_PKG_DIR:-/var/packages/YandexDisk}"
 HOME_DIR="${YD_HOME:-$PKG_DIR/home}"
+export HOME="$HOME_DIR"   # keep rclone's bisync cache consistent for scheduler/manual runs
 VAR_DIR="${YD_VAR:-$PKG_DIR/var}"
 CONF_DIR="$HOME_DIR/.config/yandex-disk"
 CONFIG_FILE="$CONF_DIR/config.cfg"
 RCLONE_CONF="${YD_RCLONE_CONF:-$HOME_DIR/.config/rclone/rclone.conf}"
 STATE_FILE="$VAR_DIR/sync.state"
-PID_FILE="$VAR_DIR/yandex-disk.pid"
 DAEMON_LOG="$VAR_DIR/logs/rclone.log"
 RESYNC_MARK="$VAR_DIR/.bisync_resynced"
 
-# --- Locate the rclone binary ----------------------------------------------
+# --- Locate the rclone binary (works whether started/stopped) ---------------
 SELF="$0"
 SELF_DIR=$(cd "$(dirname "$SELF")" 2>/dev/null && pwd 2>/dev/null || echo /usr/local/bin)
 RCLONE="${RCLONE:-$SELF_DIR/rclone}"
@@ -31,109 +32,94 @@ RCLONE="${RCLONE:-$SELF_DIR/rclone}"
 [ -x "$RCLONE" ] || RCLONE="$PKG_DIR/target/rclone"
 [ -x "$RCLONE" ] || RCLONE="rclone"
 
-# --- Read a key from config.cfg (dir="..." style, same as yandex-cleaner) ---
+# --- Read a key from config.cfg (tolerates inline "# comments" and spaces) ---
 cfg() {
     [ -f "$CONFIG_FILE" ] || return 0
-    grep -Ei "^$1=" "$CONFIG_FILE" 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '"'
+    grep -Ei "^[[:space:]]*$1[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null | head -1 \
+        | cut -d'=' -f2- \
+        | sed -e 's/[[:space:]]\{1,\}#.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+        | tr -d '"'
 }
 
-LOCAL="$(cfg dir)"
-REMOTE="$(cfg remote)";     [ -n "$REMOTE" ]   || REMOTE="yandexdisk:"
-INTERVAL="$(cfg interval)"; [ -n "$INTERVAL" ] || INTERVAL="300"
-
-is_running() {
-    # Prefer the PID file (reliable); fall back to a process scan.
-    if [ -f "$PID_FILE" ]; then
-        _pid=$(cat "$PID_FILE" 2>/dev/null)
-        if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
-            return 0
-        fi
+# If the configured remote name is absent but exactly one remote exists, use it.
+resolve_remote() {
+    [ -f "$RCLONE_CONF" ] || return 0
+    _base=$(printf '%s' "$REMOTE" | sed -e 's/:.*$//')
+    grep -q "^\[$_base\]" "$RCLONE_CONF" 2>/dev/null && return 0
+    _n=$(grep -cE '^\[' "$RCLONE_CONF" 2>/dev/null)
+    if [ "$_n" = "1" ]; then
+        _only=$(grep -E '^\[' "$RCLONE_CONF" 2>/dev/null | head -1 | tr -d '[]')
+        [ -n "$_only" ] && REMOTE="${_only}:"
     fi
-    ps -eo pid,cmd 2>/dev/null | grep -q "[y]andex-disk __daemon"
+}
+
+load_cfg() {
+    LOCAL="$(cfg dir)"
+    REMOTE="$(cfg remote)"; [ -n "$REMOTE" ] || REMOTE="yandexdisk:"
+    resolve_remote
+}
+load_cfg
+
+is_configured() {
+    [ -f "$RCLONE_CONF" ] && grep -q '^\[' "$RCLONE_CONF" 2>/dev/null && [ -n "$LOCAL" ]
+}
+
+ensure_config() {
+    mkdir -p "$CONF_DIR" 2>/dev/null
+    if [ ! -f "$CONFIG_FILE" ]; then
+        {
+            echo '# Yandex Disk (ARM). Set "dir" to your local folder.'
+            echo '# Sync PERIOD is set in DSM Task Scheduler, not here.'
+            echo 'dir=""'
+            echo 'remote="yandexdisk:"'
+        } > "$CONFIG_FILE" 2>/dev/null
+    fi
+}
+
+_now() { date "+%d.%m.%Y - %H:%M:%S"; }
+
+# One bisync invocation. $1 (optional) = "--resync".
+# --inplace          : no .partial temp (Synology indexer/AV deletes temps).
+# --max-lock/--recover : clear stale locks / recover from interrupted runs.
+# --check-sync=false : Yandex backend doesn't keep mtime exactly; tolerate it.
+# --transfers/--checkers : gentle on the 1 GB RAM of DS124.
+_bisync() {
+    "$RCLONE" bisync "$LOCAL" "$REMOTE" \
+        --config "$RCLONE_CONF" \
+        --create-empty-src-dirs --resilient --recover --inplace --max-lock 15m \
+        --check-sync=false --transfers 2 --checkers 4 \
+        --exclude "#recycle/**" --exclude "@eaDir/**" --exclude "#snapshot/**" \
+        --exclude "@tmp/**" --exclude ".DS_Store" --exclude "Thumbs.db" \
+        ${1:+"$1"}
 }
 
 run_bisync() {
-    # First successful run must establish a baseline with --resync.
-    if [ -f "$RESYNC_MARK" ]; then
-        "$RCLONE" bisync "$LOCAL" "$REMOTE" \
-            --config "$RCLONE_CONF" --create-empty-src-dirs --resilient
-    else
-        "$RCLONE" bisync "$LOCAL" "$REMOTE" \
-            --config "$RCLONE_CONF" --create-empty-src-dirs --resync \
-            && touch "$RESYNC_MARK"
+    mkdir -p "$VAR_DIR" "$(dirname "$DAEMON_LOG")" 2>/dev/null
+    # First run / no baseline: establish it with --resync (output streams to caller).
+    if [ ! -f "$RESYNC_MARK" ]; then
+        if _bisync --resync; then
+            touch "$RESYNC_MARK"; echo "idle|$(_now)|ok" > "$STATE_FILE"; return 0
+        else
+            echo "error|$(_now)|resync-failed" > "$STATE_FILE"; return 1
+        fi
     fi
+    # Normal incremental run (small output -> capture for self-heal check).
+    _out=$(_bisync 2>&1); _rc=$?
+    printf '%s\n' "$_out"
+    if [ "$_rc" -ne 0 ] && printf '%s' "$_out" | grep -qiE 'cannot find prior|Must run --resync'; then
+        echo "[auto-recover] prior listings lost — re-running with --resync"
+        if _bisync --resync; then touch "$RESYNC_MARK"; _rc=0; else _rc=1; fi
+    fi
+    if [ "$_rc" -eq 0 ]; then echo "idle|$(_now)|ok" > "$STATE_FILE"
+    else echo "error|$(_now)|rc=$_rc" > "$STATE_FILE"; fi
+    return "$_rc"
 }
 
 case "${1:-}" in
-    start)
-        if is_running; then
-            echo "yandex-disk (rclone) already running"
-            exit 0
-        fi
-        if [ ! -f "$RCLONE_CONF" ]; then
-            echo "Error: rclone remote is not configured. Run: yandex-disk setup"
-            exit 1
-        fi
-        if [ -z "$LOCAL" ]; then
-            echo "Error: sync directory is not set (dir=...) in $CONFIG_FILE. Run: yandex-disk setup"
-            exit 1
-        fi
-        mkdir -p "$LOCAL" "$VAR_DIR" "$(dirname "$DAEMON_LOG")" 2>/dev/null
-        nohup "$SELF" __daemon >>"$DAEMON_LOG" 2>&1 &
-        echo $! > "$PID_FILE"
-        echo "yandex-disk (rclone) started: '$LOCAL' <-> '$REMOTE' every ${INTERVAL}s"
-        exit 0
-        ;;
-
-    __daemon)
-        # Internal: background bisync loop. Do not call directly.
-        trap 'exit 0' TERM INT
-        mkdir -p "$VAR_DIR" "$(dirname "$DAEMON_LOG")" 2>/dev/null
-        while true; do
-            ts=$(date "+%d.%m.%Y - %H:%M:%S")
-            if run_bisync; then
-                echo "idle|$ts|ok" > "$STATE_FILE"
-            else
-                echo "error|$ts|rc=$?" > "$STATE_FILE"
-            fi
-            sleep "$INTERVAL"
-        done
-        ;;
-
-    stop)
-        pkill -f "yandex-disk __daemon" 2>/dev/null
-        pkill -f "rclone bisync"        2>/dev/null
-        rm -f "$PID_FILE"
-        echo "stopped|$(date '+%d.%m.%Y - %H:%M:%S')|manual" > "$STATE_FILE" 2>/dev/null || true
-        echo "yandex-disk (rclone) stopped"
-        exit 0
-        ;;
-
-    status)
-        if ! is_running; then
-            # Exact string preserved so yandex-logger / status.cgi keep working.
-            echo "Error: daemon not started"
-            exit 0
-        fi
-        rcver=$("$RCLONE" version 2>/dev/null | head -1)
-        state="unknown"; laststamp="-"; lastres="-"
-        if [ -f "$STATE_FILE" ]; then
-            state=$(cut -d'|' -f1 "$STATE_FILE" 2>/dev/null)
-            laststamp=$(cut -d'|' -f2 "$STATE_FILE" 2>/dev/null)
-            lastres=$(cut -d'|' -f3 "$STATE_FILE" 2>/dev/null)
-        fi
-        echo "Synchronization core status: ${state:-unknown}"
-        echo "	Sync engine: ${rcver:-rclone} (Yandex Disk via rclone)"
-        echo "	Path to Yandex.Disk directory: '$LOCAL'"
-        echo "	Remote: '$REMOTE'"
-        echo "	Sync interval: ${INTERVAL}s"
-        echo "	Last sync: ${laststamp:--} (${lastres:--})"
-        exit 0
-        ;;
-
     sync)
-        if [ -z "$LOCAL" ]; then
-            echo "Error: sync directory is not set (dir=...) in $CONFIG_FILE"
+        ensure_config
+        if ! is_configured; then
+            echo "Error: not configured yet — run: yandex-disk setup"
             exit 1
         fi
         mkdir -p "$LOCAL" 2>/dev/null
@@ -141,33 +127,45 @@ case "${1:-}" in
         exit $?
         ;;
 
+    status)
+        rcver=$("$RCLONE" version 2>/dev/null | head -1)
+        echo "Sync engine: ${rcver:-rclone} (Yandex Disk via rclone)"
+        echo "	Path to Yandex.Disk directory: '${LOCAL:-<not set>}'"
+        echo "	Remote: '$REMOTE'"
+        if [ -f "$STATE_FILE" ]; then
+            st=$(cut -d'|' -f1 "$STATE_FILE" 2>/dev/null)
+            ts=$(cut -d'|' -f2 "$STATE_FILE" 2>/dev/null)
+            rs=$(cut -d'|' -f3 "$STATE_FILE" 2>/dev/null)
+            echo "	Last sync: ${ts:--} (${st:-?}/${rs:--})"
+        else
+            echo "	Last sync: never (run 'yandex-disk sync' or set up the scheduled task)"
+        fi
+        exit 0
+        ;;
+
     setup|token|config)
+        ensure_config
         echo "=== Yandex Disk (ARM / rclone) setup ==="
         echo
         echo "1) Configure the Yandex Disk remote (named 'yandexdisk'):"
-        echo "   On a machine WITH a browser run:"
-        echo "       rclone authorize \"yandex\""
-        echo "   copy the JSON token it prints, then on the NAS run:"
-        echo "       rclone config create yandexdisk yandex token '<PASTE_JSON_TOKEN>' \\"
-        echo "           --config \"$RCLONE_CONF\""
-        echo "   (or run 'rclone config --config $RCLONE_CONF' interactively over SSH)."
+        echo "   On a machine WITH a browser:   rclone authorize \"yandex\""
+        echo "   then on the NAS:"
+        echo "       rclone config create yandexdisk yandex token '<PASTE_JSON>' --config \"$RCLONE_CONF\""
         echo
-        echo "2) Set the local sync folder and options in:"
-        echo "       $CONFIG_FILE"
-        echo "   Example:"
-        echo "       dir=\"/volume1/yandexdisk\""
+        echo "2) Set the local folder in: $CONFIG_FILE"
+        echo "       dir=\"/volume1/yourfolder\""
         echo "       remote=\"yandexdisk:\""
-        echo "       interval=300"
         echo
-        echo "3) Start syncing:   synopkg start YandexDisk   (or: yandex-disk start)"
-        # Offer interactive rclone config if attached to a terminal.
+        echo "3) Schedule periodic sync — DSM Control Panel -> Task Scheduler -> Scheduled Task ->"
+        echo "   User-defined script (user: root, every 5 min), command:"
+        echo "       sudo -u sc-yandexdisk $PKG_DIR/target/yandex-disk sync"
+        echo
+        echo "Sync once now:   yandex-disk sync"
         if [ -t 0 ] && [ "${1:-}" != "token" ]; then
             mkdir -p "$(dirname "$RCLONE_CONF")" 2>/dev/null
             printf '\nRun interactive rclone config now? [y/N] '
             read ans 2>/dev/null || ans=""
-            case "$ans" in
-                y|Y) exec "$RCLONE" config --config "$RCLONE_CONF" ;;
-            esac
+            case "$ans" in y|Y) exec "$RCLONE" config --config "$RCLONE_CONF" ;; esac
         fi
         exit 0
         ;;
@@ -178,14 +176,20 @@ case "${1:-}" in
         ;;
 
     rclone)
-        # Passthrough: yandex-disk rclone <args...>  ->  rclone <args...>
         shift
         exec "$RCLONE" --config "$RCLONE_CONF" "$@"
         ;;
 
+    start|stop)
+        # Kept for compatibility — this build has no resident sync daemon.
+        echo "No resident daemon in this build. Periodic sync is via DSM Task Scheduler"
+        echo "(command: yandex-disk sync). To sync now:  yandex-disk sync"
+        exit 0
+        ;;
+
     *)
-        echo "Usage: yandex-disk {start|stop|status|sync|setup|version|rclone <args...>}"
-        echo "ARM64 wrapper around native rclone (Yandex Disk backend). See: yandex-disk setup"
+        echo "Usage: yandex-disk {sync|status|setup|version|rclone <args...>}"
+        echo "Periodic sync is configured in DSM Task Scheduler (runs 'yandex-disk sync')."
         exit 1
         ;;
 esac

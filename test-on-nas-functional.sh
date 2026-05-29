@@ -29,7 +29,7 @@ echo "================================================================"
 
 # 1. Процессы: демон, logger, cleaner
 echo "--- 1. Запущенные процессы ---"
-ck "демон синхронизации [y]andex-disk запущен" "ps -eo cmd | grep -q '[y]andex-disk'"
+ck "есть запись последней синхронизации (sync.state)" "[ -f /var/packages/YandexDisk/var/sync.state ]"
 ck "[y]andex-logger запущен"                    "ps -eo cmd | grep -q '[y]andex-logger'"
 ck "[y]andex-cleaner запущен"                   "ps -eo cmd | grep -q '[y]andex-cleaner'"
 

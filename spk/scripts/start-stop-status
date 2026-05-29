@@ -1,23 +1,25 @@
 #!/bin/sh
 
-DAEMON="/usr/local/bin/yandex-disk"
+# No resident sync daemon in this build: on DSM 7 a backgrounded shell loop is
+# unreliable under systemd. Periodic sync is configured as a DSM Task Scheduler job
+# that runs 'yandex-disk sync'. Here we only run the lightweight logger/cleaner so
+# DSM shows the package as running and the UI keeps a status history.
+
 LOGGER="/var/packages/YandexDisk/scripts/yandex-logger"
 CLEANER="/var/packages/YandexDisk/scripts/yandex-cleaner"
 
 case "$1" in
     start)
-		$DAEMON start
-		$LOGGER &
-		$CLEANER &
-		exit 0
+        "$LOGGER" &
+        "$CLEANER" &
+        exit 0
         ;;
     stop)
-		$DAEMON stop
-		pkill -f yandex-logger
-		pkill -f yandex-cleaner
-		exit 0
+        pkill -f yandex-logger
+        pkill -f yandex-cleaner
+        exit 0
         ;;
     status)
-		ps -eo cmd | grep -q "[y]andex-disk" && exit 0 || exit 3
-		;;
+        ps -eo cmd | grep -q "[y]andex-logger" && exit 0 || exit 3
+        ;;
 esac
