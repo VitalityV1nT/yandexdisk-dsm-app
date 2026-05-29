@@ -1,0 +1,30 @@
+# Build notes — ARM64 порт пакета Yandex Disk для Synology DSM
+
+## Целевое устройство
+- Модель:        Synology DS124
+- Процессор:     Realtek RTD1619B
+- Архитектура:   ARMv8 / aarch64 / ARM 64-bit
+- Семейство DSM: rtd1619b
+
+## Целевые ARM-платформы Synology (значение для поля arch= в spk/INFO)
+rtd1619b rtd1296 armada37xx armada38x alpine4k
+
+## Соответствие платформ и моделей (ориентир)
+- rtd1619b   : DS124, DS223j, DS223, DS123, DS223 (Realtek RTD1619B, aarch64)
+- rtd1296    : DS118, DS218, DS218play, DS418, DS420j (Realtek RTD1296, aarch64)
+- armada37xx : DS120j, DS119j, DS220j (Marvell Armada 37xx, aarch64)
+- armada38x  : DS116, DS216se, DS216j, RS217 (Marvell Armada 38x, 32-bit armv7 — см. примечание)
+- alpine4k   : DS416, DS216, DS715 (Annapurna Labs Alpine, 32-bit armv7 — см. примечание)
+
+## Примечание про разрядность
+DS124 (rtd1619b) и rtd1296 — это 64-битные ARMv8 (aarch64), поэтому используется
+бинарник yandex-disk сборки arm64/aarch64. Платформы armada38x/alpine4k исторически
+32-битные (armv7); 64-битный бинарник на них не запустится. Они включены в arch=
+для широты установки, но реально проверенная и работающая цель этого порта — aarch64
+(rtd1619b / rtd1296). Для строго 32-битных моделей потребуется отдельный armhf-бинарник.
+
+## Источник ARM-бинарника
+ARM64 .deb официального консольного клиента Яндекс Диска:
+  https://downloader.disk.yandex.ru/disk/yandex-disk_latest_arm64.deb
+Фолбэк (официальный репозиторий Яндекса):
+  http://repo.yandex.ru/yandex-disk/deb/pool/main/y/yandex-disk/

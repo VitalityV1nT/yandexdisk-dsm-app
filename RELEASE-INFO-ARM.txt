@@ -1,0 +1,68 @@
+================================================================
+  Yandex Disk (ARM) for Synology DSM — RELEASE INFO
+================================================================
+
+Package           : YandexDisk
+Display name      : Yandex Disk (ARM)
+Version           : 0.1.6.1080-4  (ARM-сборка; "ARM" в displayname, т.к. DSM требует числовую ревизию)
+Build date        : 2026-05-29
+DSM minimum       : 7.0-40000
+
+----------------------------------------------------------------
+ARCHITECTURE
+----------------------------------------------------------------
+Target            : ARM64 / aarch64 / ARMv8
+Sync engine       : rclone v1.74.2 (native linux-arm64, statically linked)
+Yandex backend    : rclone built-in "yandex" backend (two-way bisync)
+
+Why rclone        : the official `yandex-disk` CLI is x86-only (amd64/i386)
+                    and has NO ARM build, so this port replaces it with the
+                    native arm64 rclone engine, wrapped to keep the same
+                    start/stop/status control surface and DSM UI.
+
+----------------------------------------------------------------
+SUPPORTED SYNOLOGY PLATFORMS (INFO arch= field)
+----------------------------------------------------------------
+rtd1619b rtd1296 armada37xx armada38x alpine4k
+
+  64-bit (aarch64) — fully supported by this arm64 build:
+    rtd1619b   : DS124, DS223j, DS223, DS123
+    rtd1296    : DS118, DS218, DS218play, DS418, DS420j
+    armada37xx : DS120j, DS220j, DS119j
+
+  32-bit (armv7) — listed for installation breadth, but the arm64 binary
+  will NOT execute here; a separate linux-arm (armv7) rclone build is needed:
+    armada38x  : DS116, DS216j, DS216se, RS217
+    alpine4k   : DS416, DS216, DS715
+
+  Primary tested target: Synology DS124 (Realtek RTD1619B, aarch64).
+
+----------------------------------------------------------------
+ARTIFACT
+----------------------------------------------------------------
+File              : YandexDisk-ARM.spk
+Size              : 24453120 bytes (~23 MB)
+SHA-256 (.spk)    : 13c1ae35b2d232e7db82866386d05f13d6b32c21518d6cfbc53301fedc08f576
+SHA-256 (rclone)  : 1e87350a2c6d5dbbac7d5e8847cd95790791959fbc1151b25cb044dc64924508
+
+Verify:
+    sha256sum -c YandexDisk-ARM.spk.sha256
+
+----------------------------------------------------------------
+QUICK INSTALL
+----------------------------------------------------------------
+1. DSM -> Package Center -> Manual Install -> upload YandexDisk-ARM.spk.
+   (On the warning about an unknown publisher, confirm install.)
+2. After install, grant the system user `sc-yandexdisk` read/write on your
+   sync shared folder (Control Panel -> Shared Folder -> Edit -> Permissions).
+3. Configure Yandex Disk auth + sync folder over SSH:
+       sudo -u sc-yandexdisk yandex-disk setup
+   (Run `rclone authorize "yandex"` on a desktop with a browser, paste the
+   token, then set dir=/remote in config.cfg — see README-ARM.md.)
+4. Start:  synopkg start YandexDisk   (or via Package Center).
+5. Validate on the NAS:
+       ./test-on-nas-install.sh
+       ./test-on-nas-functional.sh
+
+See README-ARM.md for the full model list and rclone setup, and the original
+README.md for general DSM shared-folder/permission steps.

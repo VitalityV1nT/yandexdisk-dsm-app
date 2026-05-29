@@ -1,5 +1,5 @@
 {
     "usr-local-linker": {
-        "bin": ["yandex-disk"]
+        "bin": ["yandex-disk", "rclone"]
     }
 }

@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Test & coverage reports
+__test__/reports/
+coverage/
+.stryker-tmp/
+playwright-report/
+test-results/
+reports/
+
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.development
+.env.staging
+.env.production
+
+# Editor
+.idea/
+.vscode/
+.junie/
+.aiassistant/
+.claude/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logging/
+
+# DB
+*.db
+*.sqlite
+*.sqlite3
+
+# Mutation testing
+mutants/
+.mutmut-cache
+
+# any
+audit-project/
+*:Zone.Identifier
+docker-compose.override.yml
+.output.txt
+
+# Docker
+.docker/
+
+# TypeScript incremental compilation
+*.tsbuildinfo
+
+# ARM build — transient artifacts (НЕ коммитить)
+downloads/
+test_package/
+spk/package.tgz
+spk/package/*.backup

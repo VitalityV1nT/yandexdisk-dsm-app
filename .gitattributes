@@ -1,0 +1,23 @@
+# Shell/DSM package scripts MUST keep LF line endings.
+# CRLF (from core.autocrlf=true on Windows/WSL checkouts) breaks the
+# `#!/bin/sh` shebang and case/if parsing once the package runs on DSM.
+spk/scripts/start-stop-status text eol=lf
+spk/scripts/yandex-logger     text eol=lf
+spk/scripts/yandex-cleaner    text eol=lf
+spk/package/yandex-disk       text eol=lf
+spk/package/ui/scripts/*.cgi  text eol=lf
+*.sh                          text eol=lf
+
+# DSM control files (parsed by Package Center) — LF only, no CRLF.
+spk/INFO                      text eol=lf
+spk/conf/privilege            text eol=lf
+spk/conf/resource             text eol=lf
+
+# Binaries must never be touched by line-ending normalization.
+spk/package/rclone            binary
+spk/package/*.backup          binary
+*.spk                         binary
+*.deb                         binary
+*.zip                         binary
+*.PNG                         binary
+*.png                         binary

@@ -93,6 +93,25 @@
    Чтобы настройка действовала корректно, названия исключаемых директорий нужно перечислять через запятую, без пробелов. Например `exclude-dirs=DoNotSync,Не синхронизировать,учёба,работа`.
 
 ---
+## 🛠️ СБОРКА `.spk`-ПАКЕТА
+
+1. Перейдите в папку `spk/package` и упакуйте её содержимое в `package.tgz`:
+   ```bash
+   cd spk/package
+   tar -czf ../package.tgz .
+   cd ..
+   ```
+
+2. Из папки `spk` упакуйте всё содержимое в итоговый `.spk`-файл:
+   ```bash
+   tar -cf ../YandexDisk.spk conf scripts INFO LICENSE PACKAGE_ICON.PNG PACKAGE_ICON_256.PNG package.tgz
+   cd ..
+   ```
+
+3. Готовый файл `YandexDisk.spk` можно установить через DSM:  
+   `Центр пакетов → Установка вручную`
+
+---
 ## 🐞 Обратная связь
 Связаться можно [в комментариях на YouTube](https://youtu.be/KB_YwQbxSW8) или в [Issue](https://github.com/VitalityV1nT/yandexdisk-dsm-app/issues).
 
