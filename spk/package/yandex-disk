@@ -21,8 +21,10 @@ CONF_DIR="$HOME_DIR/.config/yandex-disk"
 CONFIG_FILE="$CONF_DIR/config.cfg"
 RCLONE_CONF="${YD_RCLONE_CONF:-$HOME_DIR/.config/rclone/rclone.conf}"
 STATE_FILE="$VAR_DIR/sync.state"
-DAEMON_LOG="$VAR_DIR/logs/rclone.log"
+DAEMON_LOG="$VAR_DIR/logs/rclone.log"        # real rclone bisync output (for diagnosis)
 RESYNC_MARK="$VAR_DIR/.bisync_resynced"
+RCLONE_VER_CACHE="$VAR_DIR/rclone.version"   # cached `rclone version` (avoid per-status spawn)
+SYNC_LOCK="$VAR_DIR/sync.lock"
 
 # --- Locate the rclone binary (works whether started/stopped) ---------------
 SELF="$0"
@@ -78,14 +80,37 @@ ensure_config() {
 
 _now() { date "+%d.%m.%Y - %H:%M:%S"; }
 
+# Cached rclone version string (first line only). rclone is a ~72 MB static Go
+# binary; spawning it on every `status` (the UI logger polls once a minute) wastes
+# CPU/RAM on the 1 GB DS124. The version only changes on package upgrade, so cache
+# it once; start-stop-status drops the stale cache on (re)start to pick up upgrades.
+rclone_version() {
+    if [ -s "$RCLONE_VER_CACHE" ]; then
+        cat "$RCLONE_VER_CACHE"
+        return 0
+    fi
+    _ver=$("$RCLONE" version 2>/dev/null | head -1)
+    if [ -n "$_ver" ]; then
+        mkdir -p "$VAR_DIR" 2>/dev/null
+        printf '%s\n' "$_ver" > "$RCLONE_VER_CACHE" 2>/dev/null
+    fi
+    printf '%s\n' "$_ver"
+}
+
 # One bisync invocation. $1 (optional) = "--resync".
 # --inplace          : no .partial temp (Synology indexer/AV deletes temps).
 # --max-lock/--recover : clear stale locks / recover from interrupted runs.
 # --check-sync=false : Yandex backend doesn't keep mtime exactly; tolerate it.
+# --conflict-resolve path1 : on a two-sided edit the LOCAL copy wins (matches README);
+#                    chosen over "newer" because the Yandex backend's mtime is
+#                    unreliable — the losing remote copy is kept renamed, not lost.
+# --log-file         : persist the real bisync output so failures are diagnosable.
 # --transfers/--checkers : gentle on the 1 GB RAM of DS124.
 _bisync() {
     "$RCLONE" bisync "$LOCAL" "$REMOTE" \
         --config "$RCLONE_CONF" \
+        --log-file "$DAEMON_LOG" --log-format date,time \
+        --conflict-resolve path1 \
         --create-empty-src-dirs --resilient --recover --inplace --max-lock 15m \
         --check-sync=false --transfers 2 --checkers 4 \
         --exclude "#recycle/**" --exclude "@eaDir/**" --exclude "#snapshot/**" \
@@ -95,7 +120,7 @@ _bisync() {
 
 run_bisync() {
     mkdir -p "$VAR_DIR" "$(dirname "$DAEMON_LOG")" 2>/dev/null
-    # First run / no baseline: establish it with --resync (output streams to caller).
+    # First run / no baseline: establish it with --resync.
     if [ ! -f "$RESYNC_MARK" ]; then
         if _bisync --resync; then
             touch "$RESYNC_MARK"; echo "idle|$(_now)|ok" > "$STATE_FILE"; return 0
@@ -103,10 +128,14 @@ run_bisync() {
             echo "error|$(_now)|resync-failed" > "$STATE_FILE"; return 1
         fi
     fi
-    # Normal incremental run (small output -> capture for self-heal check).
+    # Normal incremental run. With --log-file, rclone's diagnostics go to $DAEMON_LOG
+    # (and usually no longer to stderr), so the self-heal trigger is searched in the
+    # log tail as well as in any captured output.
     _out=$(_bisync 2>&1); _rc=$?
-    printf '%s\n' "$_out"
-    if [ "$_rc" -ne 0 ] && printf '%s' "$_out" | grep -qiE 'cannot find prior|Must run --resync'; then
+    [ -n "$_out" ] && printf '%s\n' "$_out"
+    if [ "$_rc" -ne 0 ] && \
+       { printf '%s\n' "$_out"; tail -n 100 "$DAEMON_LOG" 2>/dev/null; } \
+         | grep -qiE 'cannot find prior|Must run --resync'; then
         echo "[auto-recover] prior listings lost — re-running with --resync"
         if _bisync --resync; then touch "$RESYNC_MARK"; _rc=0; else _rc=1; fi
     fi
@@ -122,13 +151,21 @@ case "${1:-}" in
             echo "Error: not configured yet — run: yandex-disk setup"
             exit 1
         fi
-        mkdir -p "$LOCAL" 2>/dev/null
+        mkdir -p "$LOCAL" "$VAR_DIR" 2>/dev/null
+        # Single-run guard: the first --resync of a large library can outlast the
+        # 5-min scheduler period; without this, a second scheduled run would fight
+        # the first over the same paths and bisync cache. flock is advisory but
+        # reliable; if unavailable we fall through to rclone's own --max-lock.
+        if command -v flock >/dev/null 2>&1; then
+            exec 9>"$SYNC_LOCK"
+            flock -n 9 || { echo "sync already running, skip"; exit 0; }
+        fi
         run_bisync
         exit $?
         ;;
 
     status)
-        rcver=$("$RCLONE" version 2>/dev/null | head -1)
+        rcver=$(rclone_version)
         echo "Sync engine: ${rcver:-rclone} (Yandex Disk via rclone)"
         echo "	Path to Yandex.Disk directory: '${LOCAL:-<not set>}'"
         echo "	Remote: '$REMOTE'"

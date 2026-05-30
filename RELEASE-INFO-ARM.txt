@@ -4,8 +4,8 @@
 
 Package           : YandexDisk
 Display name      : Yandex Disk (ARM)
-Version           : 0.1.6.1080-12  (ARM-сборка; "ARM" в displayname, т.к. DSM требует числовую ревизию)
-Build date        : 2026-05-29
+Version           : 0.1.6.1080-13  (ARM-сборка; "ARM" в displayname, т.к. DSM требует числовую ревизию)
+Build date        : 2026-05-30
 DSM minimum       : 7.0-40000
 
 ----------------------------------------------------------------
@@ -42,7 +42,7 @@ ARTIFACT
 ----------------------------------------------------------------
 File              : YandexDisk-ARM.spk
 Size              : 24453120 bytes (~23 MB)
-SHA-256 (.spk)    : 2ca699cdadeb10fec3652a869acfd84a1835528225d492a9c592550e61cad369
+SHA-256 (.spk)    : 69f94a06f6b29b6f91491cf4a0237d51a7d03bfaa63d4e38967f4453569fc0e9
 SHA-256 (rclone)  : 1e87350a2c6d5dbbac7d5e8847cd95790791959fbc1151b25cb044dc64924508
 
 Verify:

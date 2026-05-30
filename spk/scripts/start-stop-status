@@ -10,6 +10,10 @@ CLEANER="/var/packages/YandexDisk/scripts/yandex-cleaner"
 
 case "$1" in
     start)
+        # Drop any stale cached rclone version (e.g. after a package upgrade); the
+        # first `yandex-disk status` repopulates it, then the per-minute UI poll reads
+        # the cache instead of spawning the 72 MB rclone binary on every call.
+        rm -f /var/packages/YandexDisk/var/rclone.version 2>/dev/null
         "$LOGGER" &
         "$CLEANER" &
         exit 0
