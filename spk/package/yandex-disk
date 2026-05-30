@@ -13,35 +13,23 @@
 
 set -u
 
-PKG_DIR="${YD_PKG_DIR:-/var/packages/YandexDisk}"
-HOME_DIR="${YD_HOME:-$PKG_DIR/home}"
-export HOME="$HOME_DIR"   # keep rclone's bisync cache consistent for scheduler/manual runs
-VAR_DIR="${YD_VAR:-$PKG_DIR/var}"
-CONF_DIR="$HOME_DIR/.config/yandex-disk"
-CONFIG_FILE="$CONF_DIR/config.cfg"
-RCLONE_CONF="${YD_RCLONE_CONF:-$HOME_DIR/.config/rclone/rclone.conf}"
-STATE_FILE="$VAR_DIR/sync.state"
-DAEMON_LOG="$VAR_DIR/logs/rclone.log"        # real rclone bisync output (for diagnosis)
-RESYNC_MARK="$VAR_DIR/.bisync_resynced"
-RCLONE_VER_CACHE="$VAR_DIR/rclone.version"   # cached `rclone version` (avoid per-status spawn)
-SYNC_LOCK="$VAR_DIR/sync.lock"
-
-# --- Locate the rclone binary (works whether started/stopped) ---------------
+# --- Shared paths / config parser / log helpers (single source of truth) ----
+# Source common.sh from next to this script (source tree or installed target) or,
+# when invoked via the /usr/local/bin symlink, from the installed package target.
 SELF="$0"
 SELF_DIR=$(cd "$(dirname "$SELF")" 2>/dev/null && pwd 2>/dev/null || echo /usr/local/bin)
+if [ -f "$SELF_DIR/common.sh" ]; then
+    . "$SELF_DIR/common.sh"
+else
+    . "${YD_PKG_DIR:-/var/packages/YandexDisk}/target/common.sh"
+fi
+export HOME="$HOME_DIR"   # keep rclone's bisync cache consistent for scheduler/manual runs
+
+# --- Locate the rclone binary (works whether started/stopped) ---------------
 RCLONE="${RCLONE:-$SELF_DIR/rclone}"
 [ -x "$RCLONE" ] || RCLONE="/usr/local/bin/rclone"
 [ -x "$RCLONE" ] || RCLONE="$PKG_DIR/target/rclone"
 [ -x "$RCLONE" ] || RCLONE="rclone"
-
-# --- Read a key from config.cfg (tolerates inline "# comments" and spaces) ---
-cfg() {
-    [ -f "$CONFIG_FILE" ] || return 0
-    grep -Ei "^[[:space:]]*$1[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null | head -1 \
-        | cut -d'=' -f2- \
-        | sed -e 's/[[:space:]]\{1,\}#.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
-        | tr -d '"'
-}
 
 # If the configured remote name is absent but exactly one remote exists, use it.
 resolve_remote() {
@@ -72,18 +60,17 @@ ensure_config() {
         {
             echo '# Yandex Disk (ARM). Set "dir" to your local folder.'
             echo '# Sync PERIOD is set in DSM Task Scheduler, not here.'
+            echo '# Optional: clean_thumbs=1 deletes local Thumbs.db/.DS_Store after each sync.'
             echo 'dir=""'
             echo 'remote="yandexdisk:"'
         } > "$CONFIG_FILE" 2>/dev/null
     fi
 }
 
-_now() { date "+%d.%m.%Y - %H:%M:%S"; }
-
 # Cached rclone version string (first line only). rclone is a ~72 MB static Go
-# binary; spawning it on every `status` (the UI logger polls once a minute) wastes
-# CPU/RAM on the 1 GB DS124. The version only changes on package upgrade, so cache
-# it once; start-stop-status drops the stale cache on (re)start to pick up upgrades.
+# binary; spawning it on every `status` would waste CPU/RAM on the 1 GB DS124. The
+# version only changes on package upgrade, so cache it once; start-stop-status drops
+# the stale cache on (re)start to pick up upgrades.
 rclone_version() {
     if [ -s "$RCLONE_VER_CACHE" ]; then
         cat "$RCLONE_VER_CACHE"
@@ -95,6 +82,21 @@ rclone_version() {
         printf '%s\n' "$_ver" > "$RCLONE_VER_CACHE" 2>/dev/null
     fi
     printf '%s\n' "$_ver"
+}
+
+# Opt-in local junk cleanup (config: clean_thumbs=1). Runs ONCE per sync, not as a
+# separate always-on hourly process. Deletes only Thumbs.db/.DS_Store — NOT @eaDir:
+# removing @eaDir fights Synology's media indexer, which just recreates it (endless
+# churn + lost thumbnails). bisync already excludes both from the remote, so this is
+# purely cosmetic local tidy-up and is off by default.
+maybe_clean_local() {
+    case "$(cfg clean_thumbs)" in
+        1|true|yes|on) ;;
+        *) return 0 ;;
+    esac
+    [ -n "$LOCAL" ] && [ -d "$LOCAL" ] || return 0
+    find "$LOCAL" -type f \( -name 'Thumbs.db' -o -name '.DS_Store' \) -delete 2>/dev/null
+    return 0
 }
 
 # One bisync invocation. $1 (optional) = "--resync".
@@ -109,7 +111,7 @@ rclone_version() {
 _bisync() {
     "$RCLONE" bisync "$LOCAL" "$REMOTE" \
         --config "$RCLONE_CONF" \
-        --log-file "$DAEMON_LOG" --log-format date,time \
+        --log-file "$RCLONE_LOG" --log-format date,time \
         --conflict-resolve path1 \
         --create-empty-src-dirs --resilient --recover --inplace --max-lock 15m \
         --check-sync=false --transfers 2 --checkers 4 \
@@ -119,27 +121,28 @@ _bisync() {
 }
 
 run_bisync() {
-    mkdir -p "$VAR_DIR" "$(dirname "$DAEMON_LOG")" 2>/dev/null
+    mkdir -p "$VAR_DIR" "$LOG_DIR" 2>/dev/null
+    rotate_log "$RCLONE_LOG"          # keep rclone.log bounded on the 1 GB DS124
     # First run / no baseline: establish it with --resync.
     if [ ! -f "$RESYNC_MARK" ]; then
         if _bisync --resync; then
-            touch "$RESYNC_MARK"; echo "idle|$(_now)|ok" > "$STATE_FILE"; return 0
+            touch "$RESYNC_MARK"; echo "idle|$(_now)|ok" > "$STATE_FILE"; maybe_clean_local; return 0
         else
             echo "error|$(_now)|resync-failed" > "$STATE_FILE"; return 1
         fi
     fi
-    # Normal incremental run. With --log-file, rclone's diagnostics go to $DAEMON_LOG
+    # Normal incremental run. With --log-file, rclone's diagnostics go to $RCLONE_LOG
     # (and usually no longer to stderr), so the self-heal trigger is searched in the
     # log tail as well as in any captured output.
     _out=$(_bisync 2>&1); _rc=$?
     [ -n "$_out" ] && printf '%s\n' "$_out"
     if [ "$_rc" -ne 0 ] && \
-       { printf '%s\n' "$_out"; tail -n 100 "$DAEMON_LOG" 2>/dev/null; } \
+       { printf '%s\n' "$_out"; tail -n 100 "$RCLONE_LOG" 2>/dev/null; } \
          | grep -qiE 'cannot find prior|Must run --resync'; then
         echo "[auto-recover] prior listings lost — re-running with --resync"
         if _bisync --resync; then touch "$RESYNC_MARK"; _rc=0; else _rc=1; fi
     fi
-    if [ "$_rc" -eq 0 ]; then echo "idle|$(_now)|ok" > "$STATE_FILE"
+    if [ "$_rc" -eq 0 ]; then echo "idle|$(_now)|ok" > "$STATE_FILE"; maybe_clean_local
     else echo "error|$(_now)|rc=$_rc" > "$STATE_FILE"; fi
     return "$_rc"
 }
@@ -170,12 +173,9 @@ case "${1:-}" in
         echo "	Path to Yandex.Disk directory: '${LOCAL:-<not set>}'"
         echo "	Remote: '$REMOTE'"
         if [ -f "$STATE_FILE" ]; then
-            st=$(cut -d'|' -f1 "$STATE_FILE" 2>/dev/null)
-            ts=$(cut -d'|' -f2 "$STATE_FILE" 2>/dev/null)
-            rs=$(cut -d'|' -f3 "$STATE_FILE" 2>/dev/null)
-            echo "	Last sync: ${ts:--} (${st:-?}/${rs:--})"
+            echo "	$(sync_state_line)"
         else
-            echo "	Last sync: never (run 'yandex-disk sync' or set up the scheduled task)"
+            echo "	$(sync_state_line) (run 'yandex-disk sync' or set up the scheduled task)"
         fi
         exit 0
         ;;

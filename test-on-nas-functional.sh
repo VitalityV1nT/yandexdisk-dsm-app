@@ -5,8 +5,8 @@
 #
 #   ./test-on-nas-functional.sh
 #
-# Проверяет: демон синхронизации, logger/cleaner, status, логи, и делает
-# безопасный тест синхронизации (создать → синхронизировать → проверить → удалить).
+# Проверяет: heartbeat-процесс (yandex-logger), status, логи (история + rclone.log),
+# и делает безопасный тест синхронизации (создать → синхронизировать → проверить → удалить).
 
 PKG="/var/packages/YandexDisk"
 RCLONE="/usr/local/bin/rclone";  [ -x "$RCLONE" ] || RCLONE="$PKG/target/rclone"
@@ -27,11 +27,10 @@ echo "================================================================"
 echo "  Yandex Disk (ARM) — ФУНКЦИОНАЛЬНАЯ проверка на NAS"
 echo "================================================================"
 
-# 1. Процессы: демон, logger, cleaner
+# 1. Процессы: heartbeat (logger) + запись последней синхронизации
 echo "--- 1. Запущенные процессы ---"
 ck "есть запись последней синхронизации (sync.state)" "[ -f /var/packages/YandexDisk/var/sync.state ]"
-ck "[y]andex-logger запущен"                    "ps -eo cmd | grep -q '[y]andex-logger'"
-ck "[y]andex-cleaner запущен"                   "ps -eo cmd | grep -q '[y]andex-cleaner'"
+ck "[y]andex-logger (heartbeat) запущен"        "ps -eo cmd | grep -q '[y]andex-logger'"
 
 # 2. status
 echo "--- 2. yandex-disk status ---"
@@ -43,8 +42,7 @@ ck "status НЕ сообщает 'daemon not started'" "! echo \"$ST\" | grep -q
 echo "--- 3. Логи в $LOGDIR ---"
 ck "каталог логов существует"        "[ -d '$LOGDIR' ]"
 ck "status_history.log присутствует" "[ -f '$LOGDIR/status_history.log' ]"
-ck "last_status.log присутствует"    "[ -f '$LOGDIR/last_status.log' ]"
-[ -f "$LOGDIR/rclone.log" ] && info "rclone.log: $(wc -l < "$LOGDIR/rclone.log") строк"
+[ -f "$LOGDIR/rclone.log" ] && info "rclone.log: $(wc -l < "$LOGDIR/rclone.log") строк (вкладка «Синхронизация» в UI)"
 
 # 4. Тест синхронизации (безопасный, с уникальным именем файла)
 echo "--- 4. Тест синхронизации ---"

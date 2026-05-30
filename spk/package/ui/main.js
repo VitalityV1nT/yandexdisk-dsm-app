@@ -111,6 +111,13 @@
               >
                 Лог
               </v-button>
+              <v-button
+                suffix="main"
+                :class="{ active: activeTab === 'sync_log' }"
+                @click="setTab('sync_log')"
+              >
+                Синхронизация
+              </v-button>
             </div>
 
             <!-- Контент -->

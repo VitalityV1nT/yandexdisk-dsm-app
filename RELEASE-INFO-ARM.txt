@@ -4,7 +4,7 @@
 
 Package           : YandexDisk
 Display name      : Yandex Disk (ARM)
-Version           : 0.1.6.1080-13  (ARM-сборка; "ARM" в displayname, т.к. DSM требует числовую ревизию)
+Version           : 0.1.6.1080-15  (ARM-сборка; "ARM" в displayname, т.к. DSM требует числовую ревизию)
 Build date        : 2026-05-30
 DSM minimum       : 7.0-40000
 
@@ -40,18 +40,26 @@ rtd1619b rtd1296 armada37xx armada38x alpine4k
 ----------------------------------------------------------------
 ARTIFACT
 ----------------------------------------------------------------
-File              : YandexDisk-ARM.spk
-Size              : 24453120 bytes (~23 MB)
-SHA-256 (.spk)    : 69f94a06f6b29b6f91491cf4a0237d51a7d03bfaa63d4e38967f4453569fc0e9
+File              : YandexDisk-ARM-0.1.6.1080-15.spk   (GitHub Release asset — НЕ в git)
+Size              : 24320000 bytes (~23 MB)
+SHA-256 (.spk)    : 04db8b26a3c2a1d48d2f08af7934a7543483f94e3afdc8b6ba3334420df48524
 SHA-256 (rclone)  : 1e87350a2c6d5dbbac7d5e8847cd95790791959fbc1151b25cb044dc64924508
 
+Имя файла .spk     : содержит версию (YandexDisk-ARM-<версия>.spk) — собирается
+                    build.sh из spk/INFO, так что ассеты релиза самоописательны.
+Распространение    : .spk и сырой rclone больше не коммитятся в репозиторий —
+                    они раздаются как GitHub Release assets. Сборка из исходников:
+                    `./build.sh` (докачивает rclone по SHA256 и пересобирает .spk).
+                    Сборка воспроизводима байт-в-байт (pinned mtime + gzip -n),
+                    так что этот SHA-256 повторяется при чистой пересборке.
+
 Verify:
-    sha256sum -c YandexDisk-ARM.spk.sha256
+    sha256sum -c YandexDisk-ARM-0.1.6.1080-15.spk.sha256
 
 ----------------------------------------------------------------
 QUICK INSTALL
 ----------------------------------------------------------------
-1. DSM -> Package Center -> Manual Install -> upload YandexDisk-ARM.spk.
+1. DSM -> Package Center -> Manual Install -> upload YandexDisk-ARM-0.1.6.1080-15.spk.
    (On the warning about an unknown publisher, confirm install.)
 2. After install, grant the system user `sc-yandexdisk` read/write on your
    sync shared folder (Control Panel -> Shared Folder -> Edit -> Permissions).

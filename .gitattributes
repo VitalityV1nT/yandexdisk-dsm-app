@@ -3,10 +3,14 @@
 # `#!/bin/sh` shebang and case/if parsing once the package runs on DSM.
 spk/scripts/start-stop-status text eol=lf
 spk/scripts/yandex-logger     text eol=lf
-spk/scripts/yandex-cleaner    text eol=lf
 spk/package/yandex-disk       text eol=lf
+spk/package/common.sh         text eol=lf
 spk/package/ui/scripts/*.cgi  text eol=lf
 *.sh                          text eol=lf
+
+# CI workflow — LF only (the `run:` blocks are bash; CRLF would inject \r).
+*.yml                         text eol=lf
+*.yaml                        text eol=lf
 
 # DSM control files (parsed by Package Center) — LF only, no CRLF.
 spk/INFO                      text eol=lf

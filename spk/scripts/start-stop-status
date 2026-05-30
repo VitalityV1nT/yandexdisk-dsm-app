@@ -1,29 +1,34 @@
 #!/bin/sh
-
 # No resident sync daemon in this build: on DSM 7 a backgrounded shell loop is
 # unreliable under systemd. Periodic sync is configured as a DSM Task Scheduler job
-# that runs 'yandex-disk sync'. Here we only run the lightweight logger/cleaner so
-# DSM shows the package as running and the UI keeps a status history.
+# that runs 'yandex-disk sync'. Here we only run the lightweight yandex-logger
+# heartbeat so DSM shows the package as running and the UI keeps a status history.
+#
+# (The old hourly yandex-cleaner is gone: bisync already excludes @eaDir/Thumbs.db,
+# so deleting them locally just fought Synology's media indexer. Optional local
+# cleanup is now an opt-in step inside `yandex-disk sync` — config clean_thumbs=1.)
 
-LOGGER="/var/packages/YandexDisk/scripts/yandex-logger"
-CLEANER="/var/packages/YandexDisk/scripts/yandex-cleaner"
+: "${YD_PKG_DIR:=/var/packages/YandexDisk}"
+. "$YD_PKG_DIR/target/common.sh"
+
+LOGGER="$YD_PKG_DIR/scripts/yandex-logger"
 
 case "$1" in
     start)
         # Drop any stale cached rclone version (e.g. after a package upgrade); the
-        # first `yandex-disk status` repopulates it, then the per-minute UI poll reads
-        # the cache instead of spawning the 72 MB rclone binary on every call.
-        rm -f /var/packages/YandexDisk/var/rclone.version 2>/dev/null
+        # next `yandex-disk status` repopulates it, then the UI reads the cache
+        # instead of spawning the 72 MB rclone binary.
+        rm -f "$RCLONE_VER_CACHE" 2>/dev/null
         "$LOGGER" &
-        "$CLEANER" &
         exit 0
         ;;
     stop)
-        pkill -f yandex-logger
-        pkill -f yandex-cleaner
+        # Match the script path, not a bare "yandex-logger" substring (which could
+        # hit an unrelated `tail -f .../yandex-logger`, an editor, etc.).
+        pkill -f '/scripts/yandex-logger' 2>/dev/null
         exit 0
         ;;
     status)
-        ps -eo cmd | grep -q "[y]andex-logger" && exit 0 || exit 3
+        ps -eo cmd 2>/dev/null | grep -q "[y]andex-logger" && exit 0 || exit 3
         ;;
 esac

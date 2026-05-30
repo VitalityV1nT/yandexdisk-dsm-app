@@ -1,6 +1,6 @@
 #!/bin/bash
 # test-on-nas-install.sh — РУЧНАЯ ПРОВЕРКА установки на Synology NAS (aarch64).
-# Запускать ПО SSH на самом NAS после установки YandexDisk-ARM.spk.
+# Запускать ПО SSH на самом NAS после установки пакета (YandexDisk-ARM-<версия>.spk).
 # Рекомендуется запускать от root (или через sudo).
 #
 #   ./test-on-nas-install.sh
@@ -75,7 +75,7 @@ if [ -f "$RCLONE_CONF" ]; then
     ck "в rclone.conf есть хотя бы один remote" "grep -q '^\[' '$RCLONE_CONF'"
 fi
 if [ -f "$CONFIG_DIR/config.cfg" ]; then
-    info "config.cfg: $(grep -E '^(dir|remote|interval)=' "$CONFIG_DIR/config.cfg" 2>/dev/null | tr '\n' '  ')"
+    info "config.cfg: $(grep -E '^(dir|remote|clean_thumbs)=' "$CONFIG_DIR/config.cfg" 2>/dev/null | tr '\n' '  ')"
 fi
 
 echo "================================================================"

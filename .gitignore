@@ -65,4 +65,10 @@ test_package/
 spk/package.tgz
 spk/package/*.backup
 
+# ARM release artifacts — раздаются как GitHub Release assets, НЕ коммитятся.
+# rclone воспроизводится build.sh (докачка + сверка SHA256), .spk пересобирается.
+spk/package/rclone
+*.spk
+*.spk.sha256
+
 audit-pr.md

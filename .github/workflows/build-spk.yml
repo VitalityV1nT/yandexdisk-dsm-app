@@ -1,0 +1,49 @@
+name: Build SPK
+
+# Builds the Yandex Disk (ARM) .spk on every push/PR (validation) and, on a version
+# tag (v*), publishes the versioned .spk + .sha256 as a GitHub Release asset.
+# The .spk and the rclone binary are NOT committed: build.sh fetches rclone by
+# checksum and assembles a reproducible .spk (see README-ARM.md, "Сборка пакета").
+
+on:
+  push:
+    branches: [ main, arm-support ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create a Release / upload assets on tag builds
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ubuntu-latest already ships bash, tar, gzip, unzip, curl, dash, python3 and
+      # shellcheck — build.sh fetches + SHA256-verifies rclone, runs the static checks
+      # and assembles the reproducible .spk.
+      - name: Build .spk + static checks
+        run: bash build.sh
+
+      - name: Upload .spk as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: YandexDisk-ARM-spk
+          path: |
+            YandexDisk-ARM-*.spk
+            YandexDisk-ARM-*.spk.sha256
+          if-no-files-found: error
+
+      - name: Publish GitHub Release (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            YandexDisk-ARM-*.spk YandexDisk-ARM-*.spk.sha256 \
+            --title "Yandex Disk (ARM) ${GITHUB_REF_NAME}" \
+            --notes "Автосборка ${GITHUB_REF_NAME}. Изменения — в CHANGELOG-ARM.md. Проверка: sha256sum -c YandexDisk-ARM-*.spk.sha256" \
+            --verify-tag
