@@ -7,7 +7,7 @@
 #   YandexDisk-ARM-<version>.spk          GNU tar of INFO/LICENSE/icons/conf/scripts/package.tgz
 #   YandexDisk-ARM-<version>.spk.sha256   checksum of the .spk
 #
-# The .spk file name embeds the package version (e.g. YandexDisk-ARM-0.1.6.1080-14.spk)
+# The .spk file name embeds the package version (e.g. YandexDisk-ARM-1.0.0.spk)
 # so GitHub Release assets are self-describing and revisions never silently overwrite.
 # The rclone binary and the .spk are NOT committed (released as GitHub assets); this
 # script reconstructs rclone from the official release by checksum, so a fresh clone

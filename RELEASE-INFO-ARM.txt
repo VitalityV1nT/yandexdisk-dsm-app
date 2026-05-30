@@ -4,7 +4,7 @@
 
 Package           : YandexDisk
 Display name      : Yandex Disk (ARM)
-Version           : 0.1.6.1080-15  (ARM-сборка; "ARM" в displayname, т.к. DSM требует числовую ревизию)
+Version           : 1.0.0  (SemVer; "ARM" в displayname, т.к. версия для DSM — только числовая. См. CHANGELOG-ARM.md -> «Версионирование»)
 Build date        : 2026-05-30
 DSM minimum       : 7.0-40000
 
@@ -40,9 +40,9 @@ rtd1619b rtd1296 armada37xx armada38x alpine4k
 ----------------------------------------------------------------
 ARTIFACT
 ----------------------------------------------------------------
-File              : YandexDisk-ARM-0.1.6.1080-15.spk   (GitHub Release asset — НЕ в git)
+File              : YandexDisk-ARM-1.0.0.spk   (GitHub Release asset — НЕ в git)
 Size              : 24320000 bytes (~23 MB)
-SHA-256 (.spk)    : 04db8b26a3c2a1d48d2f08af7934a7543483f94e3afdc8b6ba3334420df48524
+SHA-256 (.spk)    : 9f4be0b9a526d413c2f0e238aeac877006d1db71f2e9da1b08dad2cfe78e7b7c
 SHA-256 (rclone)  : 1e87350a2c6d5dbbac7d5e8847cd95790791959fbc1151b25cb044dc64924508
 
 Имя файла .spk     : содержит версию (YandexDisk-ARM-<версия>.spk) — собирается
@@ -54,12 +54,12 @@ SHA-256 (rclone)  : 1e87350a2c6d5dbbac7d5e8847cd95790791959fbc1151b25cb044dc6492
                     так что этот SHA-256 повторяется при чистой пересборке.
 
 Verify:
-    sha256sum -c YandexDisk-ARM-0.1.6.1080-15.spk.sha256
+    sha256sum -c YandexDisk-ARM-1.0.0.spk.sha256
 
 ----------------------------------------------------------------
 QUICK INSTALL
 ----------------------------------------------------------------
-1. DSM -> Package Center -> Manual Install -> upload YandexDisk-ARM-0.1.6.1080-15.spk.
+1. DSM -> Package Center -> Manual Install -> upload YandexDisk-ARM-1.0.0.spk.
    (On the warning about an unknown publisher, confirm install.)
 2. After install, grant the system user `sc-yandexdisk` read/write on your
    sync shared folder (Control Panel -> Shared Folder -> Edit -> Permissions).
