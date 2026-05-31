@@ -54,7 +54,17 @@ sync_state_line() {
         _st=$(cut -d'|' -f1 "$STATE_FILE" 2>/dev/null)
         _ts=$(cut -d'|' -f2 "$STATE_FILE" 2>/dev/null)
         _rs=$(cut -d'|' -f3 "$STATE_FILE" 2>/dev/null)
+        _sent=$(cut -d'|' -f4 "$STATE_FILE" 2>/dev/null)
+        _recv=$(cut -d'|' -f5 "$STATE_FILE" 2>/dev/null)
+        _mod=$(cut -d'|' -f6 "$STATE_FILE" 2>/dev/null)
+        _del=$(cut -d'|' -f7 "$STATE_FILE" 2>/dev/null)
         printf 'Последняя синхронизация: %s (%s/%s)' "${_ts:--}" "${_st:-?}" "${_rs:--}"
+        # Old 3-field state files have no counts -> print only the first line
+        # (full backward compatibility).
+        if [ -n "$_sent$_recv$_mod$_del" ]; then
+            printf '\n  Файлы — NAS → Yandex Disk (отправлено): %s; Yandex Disk → NAS (получено): %s; изменено: %s; удалено: %s' \
+                "${_sent:-0}" "${_recv:-0}" "${_mod:-0}" "${_del:-0}"
+        fi
     else
         printf 'Последняя синхронизация: ещё не выполнялась'
     fi

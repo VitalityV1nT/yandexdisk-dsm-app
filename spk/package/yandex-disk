@@ -124,6 +124,35 @@ _bisync() {
         ${1:+"$1"}
 }
 
+# Count files transferred in the most recent run = the RCLONE_LOG region after the
+# last "===== sync started" header (robust; no offset var needed). bisync logs one
+# line per queued file at -v (INFO). Sets _cnt_sent (NAS->Yandex Disk via
+# "Queue copy to Path2"), _cnt_recv (Yandex Disk->NAS via "Queue copy to Path1"),
+# _cnt_mod ("Copied (replaced existing)") and _cnt_del ("Queue delete").
+# All four substrings confirmed present in the bundled rclone v1.74.2 binary.
+count_run_transfers() {
+    _cnt_sent=0; _cnt_recv=0; _cnt_mod=0; _cnt_del=0
+    [ -f "$RCLONE_LOG" ] || return 0
+    _crt=$(awk '/^===== sync started /{b=""} {b=b $0 "\n"} END{printf "%s", b}' "$RCLONE_LOG" 2>/dev/null)
+    _cnt_sent=$(printf '%s\n' "$_crt" | grep -cF 'Queue copy to Path2')
+    _cnt_recv=$(printf '%s\n' "$_crt" | grep -cF 'Queue copy to Path1')
+    _cnt_mod=$(printf  '%s\n' "$_crt" | grep -cF 'Copied (replaced existing)')
+    _cnt_del=$(printf  '%s\n' "$_crt" | grep -cF 'Queue delete')
+    [ -n "$_cnt_sent" ] || _cnt_sent=0
+    [ -n "$_cnt_recv" ] || _cnt_recv=0
+    [ -n "$_cnt_mod" ]  || _cnt_mod=0
+    [ -n "$_cnt_del" ]  || _cnt_del=0
+    return 0
+}
+
+# Write sync.state with this run's transfer counts. $1=status $2=result.
+# Format: status|timestamp|result|sent|received|modified|deleted (7 fields).
+write_sync_state() {
+    count_run_transfers
+    printf '%s|%s|%s|%s|%s|%s|%s\n' \
+        "$1" "$(_now)" "$2" "$_cnt_sent" "$_cnt_recv" "$_cnt_mod" "$_cnt_del" > "$STATE_FILE"
+}
+
 run_bisync() {
     mkdir -p "$VAR_DIR" "$LOG_DIR" 2>/dev/null
     rotate_log "$RCLONE_LOG"          # keep rclone.log bounded on the 1 GB DS124
@@ -133,9 +162,9 @@ run_bisync() {
     # First run / no baseline: establish it with --resync.
     if [ ! -f "$RESYNC_MARK" ]; then
         if _bisync --resync; then
-            touch "$RESYNC_MARK"; echo "idle|$(_now)|ok" > "$STATE_FILE"; maybe_clean_local; return 0
+            touch "$RESYNC_MARK"; write_sync_state idle ok; maybe_clean_local; return 0
         else
-            echo "error|$(_now)|resync-failed" > "$STATE_FILE"; return 1
+            write_sync_state error resync-failed; return 1
         fi
     fi
     # Normal incremental run. With --log-file, rclone's diagnostics go to $RCLONE_LOG
@@ -149,8 +178,8 @@ run_bisync() {
         echo "[auto-recover] prior listings lost — re-running with --resync"
         if _bisync --resync; then touch "$RESYNC_MARK"; _rc=0; else _rc=1; fi
     fi
-    if [ "$_rc" -eq 0 ]; then echo "idle|$(_now)|ok" > "$STATE_FILE"; maybe_clean_local
-    else echo "error|$(_now)|rc=$_rc" > "$STATE_FILE"; fi
+    if [ "$_rc" -eq 0 ]; then write_sync_state idle ok; maybe_clean_local
+    else write_sync_state error "rc=$_rc"; fi
     return "$_rc"
 }
 
