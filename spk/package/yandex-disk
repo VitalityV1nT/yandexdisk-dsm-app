@@ -107,11 +107,15 @@ maybe_clean_local() {
 #                    chosen over "newer" because the Yandex backend's mtime is
 #                    unreliable — the losing remote copy is kept renamed, not lost.
 # --log-file         : persist the real bisync output so failures are diagnosable.
+# -v (INFO)          : at the default NOTICE level a successful / no-change bisync
+#                      writes NOTHING to the log, so healthy runs looked like the
+#                      log had "stopped updating". INFO records transfers and the
+#                      per-run "Bisync successful" summary; rotate_log keeps it bounded.
 # --transfers/--checkers : gentle on the 1 GB RAM of DS124.
 _bisync() {
     "$RCLONE" bisync "$LOCAL" "$REMOTE" \
         --config "$RCLONE_CONF" \
-        --log-file "$RCLONE_LOG" --log-format date,time \
+        --log-file "$RCLONE_LOG" --log-format date,time -v \
         --conflict-resolve path1 \
         --create-empty-src-dirs --resilient --recover --inplace --max-lock 15m \
         --check-sync=false --transfers 2 --checkers 4 \
@@ -123,6 +127,9 @@ _bisync() {
 run_bisync() {
     mkdir -p "$VAR_DIR" "$LOG_DIR" 2>/dev/null
     rotate_log "$RCLONE_LOG"          # keep rclone.log bounded on the 1 GB DS124
+    # Stamp the start of every run so the log always shows recent activity, even when
+    # rclone has nothing to report. rclone appends after this header (--log-file is O_APPEND).
+    { [ -s "$RCLONE_LOG" ] && echo ""; printf '===== sync started %s =====\n' "$(_now)"; } >> "$RCLONE_LOG"
     # First run / no baseline: establish it with --resync.
     if [ ! -f "$RESYNC_MARK" ]; then
         if _bisync --resync; then
@@ -161,7 +168,14 @@ case "${1:-}" in
         # reliable; if unavailable we fall through to rclone's own --max-lock.
         if command -v flock >/dev/null 2>&1; then
             exec 9>"$SYNC_LOCK"
-            flock -n 9 || { echo "sync already running, skip"; exit 0; }
+            flock -n 9 || {
+                echo "sync already running, skip"
+                # Record the skip too, so a stuck / long previous run explains the gap
+                # in rclone.log instead of looking like sync silently stopped.
+                mkdir -p "$LOG_DIR" 2>/dev/null
+                { [ -s "$RCLONE_LOG" ] && echo ""; printf '===== sync skipped %s (previous run still in progress) =====\n' "$(_now)"; } >> "$RCLONE_LOG"
+                exit 0
+            }
         fi
         run_bisync
         exit $?
