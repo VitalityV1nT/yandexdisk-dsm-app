@@ -18,7 +18,7 @@ RCLONE_CONF="${YD_RCLONE_CONF:-$HOME_DIR/.config/rclone/rclone.conf}"
 STATE_FILE="$VAR_DIR/sync.state"
 LOG_DIR="$VAR_DIR/logs"
 RCLONE_LOG="$LOG_DIR/rclone.log"               # real rclone bisync output (diagnosis)
-HISTORY_LOG="$LOG_DIR/status_history.log"      # status history shown in the UI "Лог" tab
+HISTORY_LOG="$LOG_DIR/status_history.log"      # status history shown in the UI "История" tab
 RESYNC_MARK="$VAR_DIR/.bisync_resynced"
 RCLONE_VER_CACHE="$VAR_DIR/rclone.version"     # cached `rclone version` (avoid per-status spawn)
 SYNC_LOCK="$VAR_DIR/sync.lock"
@@ -54,8 +54,8 @@ sync_state_line() {
         _st=$(cut -d'|' -f1 "$STATE_FILE" 2>/dev/null)
         _ts=$(cut -d'|' -f2 "$STATE_FILE" 2>/dev/null)
         _rs=$(cut -d'|' -f3 "$STATE_FILE" 2>/dev/null)
-        printf 'Last sync: %s (%s/%s)' "${_ts:--}" "${_st:-?}" "${_rs:--}"
+        printf 'Последняя синхронизация: %s (%s/%s)' "${_ts:--}" "${_st:-?}" "${_rs:--}"
     else
-        printf 'Last sync: never'
+        printf 'Последняя синхронизация: ещё не выполнялась'
     fi
 }

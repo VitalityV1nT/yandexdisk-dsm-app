@@ -6,7 +6,7 @@
 # daemon (sync is a DSM Task Scheduler job), so this near-idle heartbeat is what
 # keeps the package shown as started.
 #
-# It also maintains the status history shown in the UI "Лог" tab — by reading
+# It also maintains the status history shown in the UI "История" tab — by reading
 # var/sync.state directly (written by `yandex-disk sync`), NOT by spawning
 # `yandex-disk status` / rclone. The old logger polled `yandex-disk status` every
 # 60 s (which spawned the 72 MB rclone binary ~1440x/day just for a version string);

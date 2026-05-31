@@ -2,6 +2,22 @@
   "use strict";
   const VueRef = Vue;
 
+  // Tab key -> CGI endpoint name (status.cgi / log.cgi / sync_log.cgi). The KEYS are
+  // part of the URL and must not change; only the human labels below were renamed for
+  // clarity ("Лог" -> "История", "Синхронизация" -> "Журнал синхронизации").
+  const TABS = [
+    { key: "status", label: "Статус" },
+    { key: "log", label: "История" },
+    { key: "sync_log", label: "Журнал синхронизации" },
+  ];
+
+  // One-line caption shown under the tab bar so the two log-like tabs aren't confused.
+  const CAPTIONS = {
+    status: "Текущее состояние, папка и время последней синхронизации",
+    log: "Краткая история состояний синхронизации",
+    sync_log: "Подробный технический лог последней синхронизации (rclone)",
+  };
+
   const App = VueRef.extend({
     name: "App",
     data() {
@@ -10,24 +26,19 @@
         responseText: "",
         loading: false,
         error: null,
-        showClearButton: false,
+        tabs: TABS,
       };
+    },
+    computed: {
+      tabCaption() {
+        return CAPTIONS[this.activeTab] || "";
+      },
     },
     mounted() {
       this.fetchData();
       this.$nextTick(() => {
-        const el = this.$refs.contentArea;
-        if (el) {
-          el.focus?.();
-          el.addEventListener("scroll", this.handleScroll);
-        }
+        this.$refs.contentArea?.focus?.();
       });
-    },
-    beforeDestroy() {
-      const el = this.$refs.contentArea;
-      if (el) {
-        el.removeEventListener("scroll", this.handleScroll);
-      }
     },
     methods: {
       setTab(tab) {
@@ -38,7 +49,6 @@
         this.loading = true;
         this.error = null;
         this.responseText = "";
-        this.showClearButton = false;
 
         const basePath = "/webman/3rdparty/YandexDisk/scripts/";
         const endpoint = `${basePath}${this.activeTab}.cgi`;
@@ -61,18 +71,8 @@
           });
         }
       },
-      handleScroll() {
-        const el = this.$refs.contentArea;
-        if (!el) return;
-
-        const threshold = 40;
-        const scrolledToBottom =
-          el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
-
-        this.showClearButton = scrolledToBottom && this.activeTab === "log";
-      },
       async confirmClearLogs() {
-        if (!confirm("Вы действительно хотите очистить логи?")) return;
+        if (!confirm("Вы действительно хотите очистить историю синхронизации?")) return;
 
         try {
           await fetch("/webman/3rdparty/YandexDisk/scripts/clear_log.cgi", {
@@ -95,30 +95,30 @@
           :resizable="true"
         >
           <div class="yandex-disk-app">
-            <!-- Верхние кнопки -->
+            <!-- Вкладки -->
             <div class="top-buttons">
               <v-button
+                v-for="tab in tabs"
+                :key="tab.key"
                 suffix="main"
-                :class="{ active: activeTab === 'status' }"
-                @click="setTab('status')"
+                :class="{ active: activeTab === tab.key }"
+                @click="setTab(tab.key)"
               >
-                Статус
+                {{ tab.label }}
               </v-button>
+              <!-- Кнопка очистки истории — постоянно видна на вкладке «История» -->
               <v-button
-                suffix="main"
-                :class="{ active: activeTab === 'log' }"
-                @click="setTab('log')"
+                v-if="activeTab === 'log'"
+                class="v-button--red clear-logs-btn"
+                suffix="red"
+                @click="confirmClearLogs"
               >
-                Лог
-              </v-button>
-              <v-button
-                suffix="main"
-                :class="{ active: activeTab === 'sync_log' }"
-                @click="setTab('sync_log')"
-              >
-                Синхронизация
+                Очистить
               </v-button>
             </div>
+
+            <!-- Подпись активной вкладки -->
+            <div class="tab-caption">{{ tabCaption }}</div>
 
             <!-- Контент -->
             <div
@@ -129,16 +129,6 @@
               <div v-if="loading">Загрузка...</div>
               <div v-else-if="error" style="color: red">Ошибка: {{ error }}</div>
               <pre v-else class="result">{{ responseText }}</pre>
-
-              <!-- Кнопка очистки логов -->
-				<v-button
-					v-if="showClearButton"
-					class="v-button--red clear-logs-btn"
-					suffix="red"
-					@click="confirmClearLogs"
-				>
-					Очистить
-				</v-button>
             </div>
           </div>
         </v-app-window>

@@ -27,9 +27,15 @@
   cursor: text;
 }
 
+.tab-caption {
+  padding: 6px 19px;
+  font-size: 13px;
+  color: #767676;
+  background-color: #fafafa;
+  border-bottom: 1px solid #eee;
+}
+
+/* "Очистить" lives at the right end of the tab bar (flex header), not floating. */
 .clear-logs-btn {
-  position: absolute;
-  bottom: 16px;
-  right: 20px;
-  z-index: 10;
+  margin-left: auto;
 }

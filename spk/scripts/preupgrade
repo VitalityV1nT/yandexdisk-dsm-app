@@ -1,0 +1,42 @@
+#!/bin/sh
+# preupgrade — defensive backup of user data before DSM replaces target/ on upgrade.
+#
+# DSM does not document whether a stock (non-SynoCommunity) package's home/ survives
+# an upgrade — the SynoCommunity framework auto-backs-up only var/, and this package
+# is NOT on that framework. To avoid depending on undocumented behaviour we stash the
+# expensive-to-recreate user data (OAuth token, config.cfg, bisync baseline) into
+# $SYNOPKG_TEMP_UPGRADE_FOLDER, which DSM preserves across the upgrade; postupgrade
+# restores whatever did not survive. If home/ DID survive, postupgrade is a no-op
+# (restore-if-missing), so this is a safety net that costs ~nothing when unneeded.
+#
+# cp -a preserves ownership (sc-yandexdisk) and 0600 perms, so the restore needs no
+# chown — which is forbidden in DSM 7 package scripts anyway.
+#
+# Must exit 0: a non-zero preupgrade can abort the upgrade.
+# shellcheck shell=sh
+set -u
+
+PKG_DIR="${YD_PKG_DIR:-/var/packages/YandexDisk}"
+HOME_DIR="$PKG_DIR/home"
+VAR_DIR="$PKG_DIR/var"
+STASH="${SYNOPKG_TEMP_UPGRADE_FOLDER:-/tmp/yandexdisk.upgrade}"
+
+mkdir -p "$STASH/var" 2>/dev/null
+
+# OAuth token (.config/rclone/rclone.conf) + app config (.config/yandex-disk/config.cfg).
+[ -d "$HOME_DIR/.config" ] && cp -a "$HOME_DIR/.config" "$STASH/config" 2>/dev/null
+
+# bisync baseline marker + last state: keep the first post-upgrade sync incremental
+# (no surprise full --resync).
+for f in .bisync_resynced sync.state; do
+    [ -e "$VAR_DIR/$f" ] && cp -a "$VAR_DIR/$f" "$STASH/var/" 2>/dev/null
+done
+
+# bisync listing DB (home/.cache/rclone/bisync): preserve so the first post-upgrade
+# sync stays incremental instead of being forced into a full --resync.
+if [ -d "$HOME_DIR/.cache/rclone/bisync" ]; then
+    mkdir -p "$STASH/cache" 2>/dev/null
+    cp -a "$HOME_DIR/.cache/rclone/bisync" "$STASH/cache/" 2>/dev/null
+fi
+
+exit 0

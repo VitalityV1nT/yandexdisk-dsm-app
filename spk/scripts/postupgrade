@@ -1,0 +1,44 @@
+#!/bin/sh
+# postupgrade — restore user data stashed by preupgrade IF it did not survive the
+# upgrade. Restore-if-missing: never clobber data that DSM preserved (nothing runs
+# between pre/postupgrade, so a survived copy is identical to the stash anyway, and
+# a Task Scheduler sync that raced the upgrade could only make the live copy newer).
+# See preupgrade for the rationale and the cp -a / ownership note.
+#
+# Must exit 0.
+# shellcheck shell=sh
+set -u
+
+PKG_DIR="${YD_PKG_DIR:-/var/packages/YandexDisk}"
+HOME_DIR="$PKG_DIR/home"
+VAR_DIR="$PKG_DIR/var"
+STASH="${SYNOPKG_TEMP_UPGRADE_FOLDER:-/tmp/yandexdisk.upgrade}"
+
+[ -d "$STASH" ] || exit 0
+
+# Restore home/.config only if the OAuth token OR the app config did not survive.
+# cp -a keeps the ownership/0600 captured by preupgrade (no chown needed).
+_need=0
+[ -f "$HOME_DIR/.config/rclone/rclone.conf" ] || _need=1
+[ -f "$HOME_DIR/.config/yandex-disk/config.cfg" ] || _need=1
+if [ "$_need" = 1 ] && [ -d "$STASH/config" ]; then
+    if [ -d "$HOME_DIR/.config" ]; then
+        cp -a "$STASH/config/." "$HOME_DIR/.config/" 2>/dev/null   # fill in missing files
+    else
+        cp -a "$STASH/config" "$HOME_DIR/.config" 2>/dev/null      # recreate, preserving ownership
+    fi
+fi
+
+# Restore var baseline marker + state only when missing.
+mkdir -p "$VAR_DIR" 2>/dev/null
+for f in .bisync_resynced sync.state; do
+    [ -e "$STASH/var/$f" ] && [ ! -e "$VAR_DIR/$f" ] && cp -a "$STASH/var/$f" "$VAR_DIR/" 2>/dev/null
+done
+
+# Restore bisync listing DB only when missing.
+if [ -d "$STASH/cache/bisync" ] && [ ! -d "$HOME_DIR/.cache/rclone/bisync" ]; then
+    mkdir -p "$HOME_DIR/.cache/rclone" 2>/dev/null
+    cp -a "$STASH/cache/bisync" "$HOME_DIR/.cache/rclone/" 2>/dev/null
+fi
+
+exit 0

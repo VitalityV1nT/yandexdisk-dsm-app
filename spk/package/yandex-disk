@@ -169,13 +169,13 @@ case "${1:-}" in
 
     status)
         rcver=$(rclone_version)
-        echo "Sync engine: ${rcver:-rclone} (Yandex Disk via rclone)"
-        echo "	Path to Yandex.Disk directory: '${LOCAL:-<not set>}'"
-        echo "	Remote: '$REMOTE'"
+        echo "Движок синхронизации: ${rcver:-rclone} (Яндекс Диск через rclone)"
+        echo "	Локальная папка: '${LOCAL:-<не задана>}'"
+        echo "	Удалённый ресурс: '$REMOTE'"
         if [ -f "$STATE_FILE" ]; then
             echo "	$(sync_state_line)"
         else
-            echo "	$(sync_state_line) (run 'yandex-disk sync' or set up the scheduled task)"
+            echo "	$(sync_state_line) (запустите 'yandex-disk sync' или настройте задачу в Планировщике задач)"
         fi
         exit 0
         ;;

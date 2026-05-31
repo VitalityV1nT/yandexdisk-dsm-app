@@ -7,7 +7,7 @@
 #   YandexDisk-ARM-<version>.spk          GNU tar of INFO/LICENSE/LICENSE.rclone/icons/conf/scripts/package.tgz
 #   YandexDisk-ARM-<version>.spk.sha256   checksum of the .spk
 #
-# The .spk file name embeds the package version (e.g. YandexDisk-ARM-1.0.1.spk)
+# The .spk file name embeds the package version (e.g. YandexDisk-ARM-1.1.0.spk)
 # so GitHub Release assets are self-describing and revisions never silently overwrite.
 # The rclone binary and the .spk are NOT committed (released as GitHub assets); this
 # script reconstructs rclone from the official release by checksum, so a fresh clone
@@ -37,7 +37,7 @@ RCLONE_BIN_SHA256="1e87350a2c6d5dbbac7d5e8847cd95790791959fbc1151b25cb044dc64924
 
 # #!/bin/sh scripts (incl. the sourced common.sh lib) -> validate with dash.
 # All package scripts are POSIX sh now (the old bash yandex-cleaner is gone).
-POSIX_SH="spk/package/common.sh spk/package/yandex-disk spk/scripts/start-stop-status spk/scripts/yandex-logger spk/package/ui/scripts/clear_log.cgi spk/package/ui/scripts/log.cgi spk/package/ui/scripts/status.cgi spk/package/ui/scripts/sync_log.cgi"
+POSIX_SH="spk/package/common.sh spk/package/yandex-disk spk/scripts/start-stop-status spk/scripts/yandex-logger spk/scripts/preupgrade spk/scripts/postupgrade spk/package/ui/scripts/clear_log.cgi spk/package/ui/scripts/log.cgi spk/package/ui/scripts/status.cgi spk/package/ui/scripts/sync_log.cgi"
 
 sha_of() { sha256sum "$1" 2>/dev/null | cut -d' ' -f1; }
 
@@ -109,6 +109,7 @@ fi
 echo "==> Exec bits"
 chmod +x spk/package/yandex-disk spk/package/rclone \
          spk/scripts/start-stop-status spk/scripts/yandex-logger \
+         spk/scripts/preupgrade spk/scripts/postupgrade \
          spk/package/ui/scripts/*.cgi
 
 echo "==> Build $PKG_TGZ (root-owned, *.backup excluded, reproducible)"

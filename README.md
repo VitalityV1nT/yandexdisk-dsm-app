@@ -57,7 +57,7 @@ yandex-disk).
 ## 🔧 Установка
 
 1. **DSM → Центр пакетов → Установка вручную** → загрузите `YandexDisk-ARM-<версия>.spk`
-   (например `YandexDisk-ARM-1.0.1.spk` — файл со страницы GitHub Releases).
+   (например `YandexDisk-ARM-1.1.0.spk` — файл со страницы GitHub Releases).
    Подтвердите установку при предупреждении об «неизвестном издателе».
    После установки пакет показывает статус **«Запущено»** и ждёт настройки.
    Резидентного sync-демона в пакете нет — синхронизация не начнётся, пока вы не
@@ -229,7 +229,7 @@ sudo -u sc-yandexdisk /usr/local/bin/yandex-disk status   # должно ста�
 
 `.spk` и бинарник `rclone` **не хранятся в git** — они раздаются как **GitHub
 Release assets** и собираются из исходников. В имя `.spk` подставляется версия из
-`spk/INFO`, например `YandexDisk-ARM-1.0.1.spk`, — так ассеты релиза
+`spk/INFO`, например `YandexDisk-ARM-1.1.0.spk`, — так ассеты релиза
 самоописательны и ревизии не перезаписывают друг друга.
 
 > Версии — по семантическому версионированию `МАЖОР.МИНОР.ПАТЧ` (изменение разряда
@@ -276,12 +276,12 @@ Workflow `.github/workflows/build-spk.yml`:
 # 1. поднять версию в spk/INFO + CHANGELOG-ARM.md + RELEASE-INFO-ARM.txt
 # 2. закоммитить изменения
 # 3. поставить тег, совпадающий с версией в spk/INFO, и запушить его:
-git tag v1.0.1
-git push origin v1.0.1
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
-GitHub Actions соберёт `YandexDisk-ARM-1.0.1.spk` и приложит его к релизу
-`v1.0.1`. Ассеты можно загрузить и вручную: собрать локально
+GitHub Actions соберёт `YandexDisk-ARM-1.1.0.spk` и приложит его к релизу
+`v1.1.0`. Ассеты можно загрузить и вручную: собрать локально
 (`./build.sh`) и приложить `.spk` + `.sha256` к Release.
 
 ---
@@ -294,3 +294,20 @@ GitHub Actions соберёт `YandexDisk-ARM-1.0.1.spk` и приложит е�
   проверяется только структура пакета и корректность скриптов.
 - Движок `rclone` — сторонний open-source проект: https://rclone.org
   (бэкенд Yandex Disk: https://rclone.org/yandex/).
+
+---
+
+## 📜 Происхождение, лицензия и права
+
+- **Происхождение.** Это ARM64-форк проекта VitalityV1nT
+  ([оригинал, x86](https://github.com/VitalityV1nT/yandexdisk-dsm-app)). Текущий
+  распространитель и сопровождающий ARM-сборки —
+  [volkovpv](https://github.com/volkovpv/yandexdisk-dsm-app). Вопросы и проблемы
+  **по этой (ARM) сборке** — в [Issues](https://github.com/volkovpv/yandexdisk-dsm-app/issues).
+- **Лицензия кода** этой сборки — **MIT** (см. [`spk/LICENSE`](spk/LICENSE)). Движок
+  **rclone** — отдельный проект под MIT (см. [`spk/LICENSE.rclone`](spk/LICENSE.rclone)).
+- **Лицензия исходного проекта.** У апстрима VitalityV1nT на момент форка лицензия
+  **не указана** — правовые оговорки и атрибуция собраны в [`NOTICE`](NOTICE).
+- **Товарные знаки.** «Яндекс»/«Яндекс Диск» и «Synology»/«DSM» — товарные знаки их
+  правообладателей. Проект **не аффилирован** с ООО «Яндекс» и Synology Inc.
+  Полные уведомления — в [`NOTICE`](NOTICE) и [`spk/LICENSE`](spk/LICENSE).
