@@ -3,7 +3,7 @@ name: Build SPK
 # Builds the Yandex Disk (ARM) .spk on every push/PR (validation) and, on a version
 # tag (v*), publishes the versioned .spk + .sha256 as a GitHub Release asset.
 # The .spk and the rclone binary are NOT committed: build.sh fetches rclone by
-# checksum and assembles a reproducible .spk (see README-ARM.md, "Сборка пакета").
+# checksum and assembles a reproducible .spk (see README.md, "Сборка пакета").
 
 on:
   push:

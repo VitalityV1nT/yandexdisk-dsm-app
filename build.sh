@@ -4,10 +4,10 @@
 # Produces (from spk/), where <version> is the spk/INFO version:
 #   spk/package/rclone                    native arm64 rclone, fetched + SHA256-verified (NOT in git)
 #   spk/package.tgz                       gzip tar of spk/package/ (root-owned, *.backup excluded)
-#   YandexDisk-ARM-<version>.spk          GNU tar of INFO/LICENSE/icons/conf/scripts/package.tgz
+#   YandexDisk-ARM-<version>.spk          GNU tar of INFO/LICENSE/LICENSE.rclone/icons/conf/scripts/package.tgz
 #   YandexDisk-ARM-<version>.spk.sha256   checksum of the .spk
 #
-# The .spk file name embeds the package version (e.g. YandexDisk-ARM-1.0.0.spk)
+# The .spk file name embeds the package version (e.g. YandexDisk-ARM-1.0.1.spk)
 # so GitHub Release assets are self-describing and revisions never silently overwrite.
 # The rclone binary and the .spk are NOT committed (released as GitHub assets); this
 # script reconstructs rclone from the official release by checksum, so a fresh clone
@@ -121,7 +121,7 @@ echo "==> Build $SPK (GNU tar, root-owned, reproducible)"
 # Keep INFO first (DSM reads it from the stream); --mtime pins timestamps so a clean
 # rebuild reproduces the same archive and the same SHA-256.
 tar -C spk --format=gnu --mtime='@0' --owner=0 --group=0 --numeric-owner -cf "$ROOT/$SPK" \
-    INFO LICENSE PACKAGE_ICON.PNG PACKAGE_ICON_256.PNG conf scripts package.tgz
+    INFO LICENSE LICENSE.rclone PACKAGE_ICON.PNG PACKAGE_ICON_256.PNG conf scripts package.tgz
 
 echo "==> Checksum"
 sha256sum "$SPK" > "$SPK.sha256"

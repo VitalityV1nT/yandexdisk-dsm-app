@@ -1,47 +1,60 @@
-ВНИМАТЕЛЬНО ОЗНАКОМЬТЕСЬ ПЕРЕД УСТАНОВКОЙ ПАКЕТА!
+Yandex Disk (ARM) для Synology DSM — лицензия и правовые уведомления
 
-🌐 Проект на GitHub: https://github.com/VitalityV1nT/yandexdisk-dsm-app
+Это СТОРОННИЙ (community) пакет. Он НЕ является продуктом Synology и НЕ
+аффилирован с ООО «Яндекс», не одобрен и не поддерживается им. Движок
+синхронизации — сторонний open-source проект rclone. Устанавливая пакет, вы
+соглашаетесь с условиями ниже.
 
-📺 Видео-инструкция: https://youtu.be/KB_YwQbxSW8
+----------------------------------------------------------------------
+1. ЛИЦЕНЗИЯ КОДА ПАКЕТА (MIT)
+----------------------------------------------------------------------
+Собственный код этой сборки (sh-обёртка yandex-disk, CGI-скрипты, веб-интерфейс,
+скрипты сборки и упаковки) распространяется по лицензии MIT.
 
----------------------------------------------------------------------------
+Copyright (c) 2026 volkovpv (https://github.com/volkovpv)
+Исходная x86-версия: VitalityV1nT (https://github.com/VitalityV1nT/yandexdisk-dsm-app)
 
-🔧 УСТАНОВКА
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-1. При установке отметьте чекбокс «Запустить после установки»
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
 
-2. После установки выдайте права на папку синхронизации:
-   - Панель управления → Папка общего доступа → [ваша папка] → Редактировать → Разрешения
-   - В разделе «Внутренний пользователь системы» найдите пользователя `sc-yandexdisk`
-   - Выдайте права на чтение и запись
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 
----------------------------------------------------------------------------
+----------------------------------------------------------------------
+2. СТОРОННИЙ КОМПОНЕНТ: rclone (MIT)
+----------------------------------------------------------------------
+В пакет вложен бинарник rclone (https://rclone.org) — движок синхронизации.
+Он распространяется по лицензии MIT, Copyright (C) 2012 by Nick Craig-Wood.
+Полный текст лицензии rclone — в файле LICENSE.rclone, который входит в этот
+пакет рядом с настоящим файлом.
 
-🖥 ПЕРВОНАЧАЛЬНАЯ НАСТРОЙКА
+----------------------------------------------------------------------
+3. ТОВАРНЫЕ ЗНАКИ И ОТСУТСТВИЕ АФФИЛИАЦИИ
+----------------------------------------------------------------------
+«Яндекс», «Яндекс Диск» (Yandex, Yandex Disk) и связанные логотипы — товарные
+знаки их правообладателя (ООО «Яндекс»). Этот проект не аффилирован с ООО
+«Яндекс», не одобрен и не сертифицирован им. Имя и иконки используются
+исключительно для указания на сервис, с которым работает пакет.
 
-1. Подключитесь к NAS по SSH:
-   - Панель управления → Терминал и SNMP → Включить службу SSH
-   - Подключитесь по SSH
+«Synology», «DiskStation Manager», «DSM» — товарные знаки Synology Inc.
+Этот проект не аффилирован с Synology Inc.
 
-2. Найдите путь к папке, на которую выдали права (например: "/volume1/yandexsync")
-
-3. Выполните команду "sudo -u sc-yandexdisk yandex-disk setup"
-
-4. Ответы на вопросы установщика:
-   - Использовать прокси? Нет
-   - Would you like to use a proxy server? [y/N]: N
-
-   - Авторизуйтесь в браузере, где выполнен вход в Яндекс.Диск 
-   
-   - Укажите путь к директории для синхронизации (оберните путь в кавычки если есть пробелы):
-   - Enter path to Yandex.Disk folder (Leave empty to use default folder '/var/packages/YandexDisk/home/Yandex.Disk'): "/volume1/yandex sync"
-
-   - Не создавайте демон автозапуска (DSM самостоятельно управляет службами и обеспечит автозапуск):
-   - Would you like Yandex.Disk to launch on startup? [Y/n]: n
-
-5. Завершение:
-   - Starting daemon process...Done
-
-   - Обновите страницу DSM (F5)
-   - Откройте приложение Yandex Disk в интерфейсе DSM
-   - Проверьте статус и лог в приложении
+----------------------------------------------------------------------
+4. ОТКАЗ ОТ ГАРАНТИЙ
+----------------------------------------------------------------------
+Пакет предоставляется «КАК ЕСТЬ», без каких-либо гарантий. Вы используете его
+на свой страх и риск; авторы не несут ответственности за потерю или повреждение
+данных. Перед первой двусторонней синхронизацией убедитесь в наличии резервной
+копии важных файлов.
