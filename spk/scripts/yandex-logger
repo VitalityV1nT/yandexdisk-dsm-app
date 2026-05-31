@@ -1,64 +1,37 @@
-#!/bin/bash
+#!/bin/sh
+# yandex-logger — lightweight status heartbeat + UI history (no rclone spawn).
+#
+# Why this process exists: on DSM 7 start-stop-status reports the package as
+# "running" only while one of its processes is alive. There is NO resident sync
+# daemon (sync is a DSM Task Scheduler job), so this near-idle heartbeat is what
+# keeps the package shown as started.
+#
+# It also maintains the status history shown in the UI "История" tab — by reading
+# var/sync.state directly (written by `yandex-disk sync`), NOT by spawning
+# `yandex-disk status` / rclone. The old logger polled `yandex-disk status` every
+# 60 s (which spawned the 72 MB rclone binary ~1440x/day just for a version string);
+# this one reads a tiny state file every few minutes instead.
+#
+# shellcheck shell=sh
+set -u
 
-ps -eo pid,cmd | grep "[y]andex-logger" | grep -v $$ > /dev/null && exit 1
+: "${YD_PKG_DIR:=/var/packages/YandexDisk}"
+. "$YD_PKG_DIR/target/common.sh"
 
-LOG_DIR="/var/packages/YandexDisk/var/logs"
-LOG_INTERVAL=60
+# Single instance only (start-stop-status greps for this script).
+ps -eo pid,cmd 2>/dev/null | grep '[y]andex-logger' | grep -v "$$" >/dev/null && exit 1
 
-mkdir -p "$LOG_DIR"
+LOG_INTERVAL="${YD_LOG_INTERVAL:-300}"   # 5 min — matches the typical scheduler cadence
+mkdir -p "$LOG_DIR" 2>/dev/null
+[ -f "$HISTORY_LOG" ] || : > "$HISTORY_LOG"
 
-LOG_FILE="${LOG_DIR}/status_history.log"
-LAST_STATUS_FILE="${LOG_DIR}/last_status.log"
-
-[ -f "$LOG_FILE" ] || touch "$LOG_FILE"
-[ -f "$LAST_STATUS_FILE" ] || touch "$LAST_STATUS_FILE"
-
+LAST=""
 while true; do
-  CURRENT_TIME=$(date "+%d.%m.%Y - %H:%M:%S")
-  CURRENT_OUTPUT=$(yandex-disk status)
-  LAST_STATUS=$(<"$LAST_STATUS_FILE")
-
-  if [[ "$LAST_STATUS" == "Error: daemon not started" ]]; then
-      if [[ $(tail -n 1 "$LOG_FILE") != "" ]]; then
-          sed -i '$ d' "$LOG_FILE"
-      fi
-
-      echo "[$CURRENT_TIME] DAEMON NOT STARTED" >> "$LOG_FILE"
-      echo "$CURRENT_OUTPUT" > "$LAST_STATUS_FILE"
-
-      if [[ "$CURRENT_OUTPUT" != "$LAST_STATUS" ]]; then
-          if [ -s "$LOG_FILE" ]; then
-              echo "" >> "$LOG_FILE"
-          fi
-          {
-              echo "[$CURRENT_TIME]"
-              echo "$CURRENT_OUTPUT"
-              echo ""
-          } >> "$LOG_FILE"
-
-          echo "$CURRENT_OUTPUT" > "$LAST_STATUS_FILE"
-      fi
-
-  else
-
-      if [[ "$CURRENT_OUTPUT" != "$LAST_STATUS" ]]; then
-          if [ -s "$LOG_FILE" ]; then
-              echo "" >> "$LOG_FILE"
-          fi
-          {
-              echo "[$CURRENT_TIME]"
-              echo "$CURRENT_OUTPUT"
-              echo ""
-          } >> "$LOG_FILE"
-
-          echo "$CURRENT_OUTPUT" > "$LAST_STATUS_FILE"
-      else
-          if [[ $(tail -n 1 "$LOG_FILE") != "" ]]; then
-              sed -i '$ d' "$LOG_FILE"
-          fi
-          echo "[$CURRENT_TIME] STATUS UNCHANGED" >> "$LOG_FILE"
-      fi
-  fi
-
-  sleep "$LOG_INTERVAL"
+    CURRENT="$(sync_state_line)"
+    if [ "$CURRENT" != "$LAST" ]; then
+        rotate_log "$HISTORY_LOG"
+        { [ -s "$HISTORY_LOG" ] && echo ""; printf '[%s]\n%s\n' "$(_now)" "$CURRENT"; } >> "$HISTORY_LOG"
+        LAST="$CURRENT"
+    fi
+    sleep "$LOG_INTERVAL"
 done
