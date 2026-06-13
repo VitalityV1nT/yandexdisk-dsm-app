@@ -3,10 +3,17 @@
 # `#!/bin/sh` shebang and case/if parsing once the package runs on DSM.
 spk/scripts/start-stop-status text eol=lf
 spk/scripts/yandex-logger     text eol=lf
+spk/scripts/preupgrade        text eol=lf
+spk/scripts/postupgrade       text eol=lf
 spk/package/yandex-disk       text eol=lf
 spk/package/common.sh         text eol=lf
 spk/package/ui/scripts/*.cgi  text eol=lf
 *.sh                          text eol=lf
+
+# Гейт-скрипты и эталоны герметичных тестов: fake-rclone без расширения —
+# перечислен поимённо (урок Д-7: непокрытый путь молча получает CRLF и валит dash).
+test/fake-rclone              text eol=lf
+test/golden/*.txt             text eol=lf
 
 # CI workflow — LF only (the `run:` blocks are bash; CRLF would inject \r).
 *.yml                         text eol=lf

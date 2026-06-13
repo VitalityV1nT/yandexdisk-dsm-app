@@ -36,8 +36,8 @@ x86↔ARM — в README.md, раздел «Почему отдельная ARM-�
 build.sh докачивает официальный релиз rclone и сверяет SHA-256 (отдельно zip и
 распакованного бинарника); сам бинарник в git НЕ хранится (раздаётся как
 GitHub Release asset):
-  Версия: v1.74.2
-  Zip:    https://downloads.rclone.org/v1.74.2/rclone-v1.74.2-linux-arm64.zip
+  Версия: v1.74.3
+  Zip:    https://downloads.rclone.org/v1.74.3/rclone-v1.74.3-linux-arm64.zip
 Контрольные суммы (RCLONE_ZIP_SHA256 / RCLONE_BIN_SHA256) и шаги сборки заданы
 в build.sh; .spk собирается воспроизводимо байт-в-байт (pinned mtime + gzip -n).
 См. README.md, раздел «Сборка пакета».

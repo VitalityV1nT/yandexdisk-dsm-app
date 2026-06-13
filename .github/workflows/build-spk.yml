@@ -1,35 +1,54 @@
 name: Build SPK
 
-# Builds the Yandex Disk (ARM) .spk on every push/PR (validation) and, on a version
-# tag (v*), publishes the versioned .spk + .sha256 as a GitHub Release asset.
-# The .spk and the rclone binary are NOT committed: build.sh fetches rclone by
-# checksum and assembles a reproducible .spk (see README.md, "Сборка пакета").
+# Принудительный гейт детерминизма (Г-2 W6): на каждый push ЛЮБОЙ ветки и PR
+# прогоняются герметичные поведенческие тесты, покрытие, полный build.sh (все
+# статические гейты обязательны — без skip) и самопроверка воспроизводимости
+# (две сборки должны дать одинаковый SHA256). Готовый .spk доступен как workflow
+# artifact во вкладке Actions.
+#
+# Релиз: на push в main (т.е. после мержа PR) собранный версионированный .spk +
+# .sha256 публикуются как ассеты GitHub Release. Версия — единственный источник
+# spk/INFO (она дрейф-гейтится по INFO/CHANGELOG/RELEASE-INFO). Публикация
+# идемпотентна и привязана к bump версии: если релиз v<версия> уже существует
+# (мерж без поднятия версии — правки доков/тестов и т.п.), шаг ничего не делает.
+# Actions запинены по commit-SHA, а не по тегу: тег изменяем, SHA — нет (Г-1 §11.7).
 
 on:
   push:
-    branches: [ main, arm-support ]
-    tags: [ 'v*' ]
+    branches: [ '**' ]
   pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: write   # needed to create a Release / upload assets on tag builds
+  contents: write   # нужно для создания тега/Release и загрузки ассетов на push в main
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      # ubuntu-latest already ships bash, tar, gzip, unzip, curl, dash, python3 and
-      # shellcheck — build.sh fetches + SHA256-verifies rclone, runs the static checks
-      # and assembles the reproducible .spk.
+      # ubuntu-latest ships bash, tar, gzip, unzip, curl, dash, python3 and
+      # shellcheck; checkbashisms (devscripts) ставится отдельно — build.sh
+      # требует его обязательно (гейт без инструмента не имеет права на skip).
+      - name: Install checkbashisms (required gate tool)
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends devscripts
+
+      - name: Hermetic behavioural tests (fake-rclone, no NAS)
+        run: bash test/run-hermetic.sh
+
+      - name: Coverage gate (core scripts, bash xtrace, no NAS)
+        run: sh test/check-coverage.sh
+
       - name: Build .spk + static checks
         run: bash build.sh
 
+      - name: Reproducibility self-check (rebuild twice, compare SHA256)
+        run: bash test/check-reproducible.sh
+
       - name: Upload .spk as workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: YandexDisk-ARM-spk
           path: |
@@ -37,13 +56,51 @@ jobs:
             YandexDisk-ARM-*.spk.sha256
           if-no-files-found: error
 
-      - name: Publish GitHub Release (tag builds only)
-        if: startsWith(github.ref, 'refs/tags/v')
+      # Релиз только из main (после мержа PR) и только при новой версии.
+      # workflow_dispatch на main допускается как ручной повтор: защита от
+      # дублей (gh release view) делает его безопасным.
+      - name: Publish GitHub Release (push to main, on version bump)
+        if: >-
+          github.ref == 'refs/heads/main' &&
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
+          set -eu
+          # Версия — единственный источник spk/INFO (как в build.sh и
+          # check-version-drift.sh). Имя ассета: YandexDisk-ARM-<версия>.spk.
+          VER="$(sed -n 's/^version="\(.*\)"/\1/p' spk/INFO)"
+          [ -n "$VER" ] || { echo "ERROR: version missing in spk/INFO" >&2; exit 1; }
+          TAG="v${VER}"
+
+          # Идемпотентность: релиз привязан к версии. Если v<версия> уже есть —
+          # значит, в этом мерже версия не поднималась: ничего не публикуем.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — версия не поднята, публикация пропущена."
+            exit 0
+          fi
+
+          # Заметки релиза — секция текущей версии из CHANGELOG-ARM.md
+          # (формат заголовка: «## [1.2.2] (ARM) — YYYY-MM-DD»).
+          awk -v ver="$VER" '
+            BEGIN { gsub(/\./, "\\.", ver); re = "^## \\[" ver "\\]" }
+            $0 ~ re { flag=1; print; next }
+            flag && /^## \[/ { exit }
+            flag { print }
+          ' CHANGELOG-ARM.md > release-notes.md
+          {
+            echo
+            echo "---"
+            echo "Проверка целостности скачанного \`.spk\`:"
+            echo '```sh'
+            echo "sha256sum -c YandexDisk-ARM-${VER}.spk.sha256"
+            echo '```'
+            echo "Полный список изменений — в \`CHANGELOG-ARM.md\`."
+          } >> release-notes.md
+
+          gh release create "$TAG" \
             YandexDisk-ARM-*.spk YandexDisk-ARM-*.spk.sha256 \
-            --title "Yandex Disk (ARM) ${GITHUB_REF_NAME}" \
-            --notes "Автосборка ${GITHUB_REF_NAME}. Изменения — в CHANGELOG-ARM.md. Проверка: sha256sum -c YandexDisk-ARM-*.spk.sha256" \
-            --verify-tag
+            --title "Yandex Disk (ARM) ${VER}" \
+            --target "${GITHUB_SHA}" \
+            --notes-file release-notes.md
+          echo "Опубликован релиз $TAG с ассетом YandexDisk-ARM-${VER}.spk"

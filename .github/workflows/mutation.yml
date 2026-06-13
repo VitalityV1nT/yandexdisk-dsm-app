@@ -1,0 +1,24 @@
+name: Mutation testing
+
+# Мутационный гейт тяжёлый (полный герметичный набор на каждого мутанта), поэтому
+# он НЕ на каждый push, а ночным заданием и по кнопке (workflow_dispatch).
+# Сеть/NAS не нужны: всё герметично (fake-rclone). Порог — YD_MUT_MIN (по умолч. 90).
+# Эквивалентные мутанты вет­тированы в test/mutate.equiv.
+
+on:
+  schedule:
+    - cron: '17 2 * * *'   # ежедневно ~02:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Mutation score gate (hermetic, no NAS)
+        run: sh test/mutate.sh

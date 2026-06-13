@@ -129,7 +129,7 @@ _bisync() {
 # line per queued file at -v (INFO). Sets _cnt_sent (NAS->Yandex Disk via
 # "Queue copy to Path2"), _cnt_recv (Yandex Disk->NAS via "Queue copy to Path1"),
 # _cnt_mod ("Copied (replaced existing)") and _cnt_del ("Queue delete").
-# All four substrings confirmed present in the bundled rclone v1.74.2 binary.
+# All four substrings confirmed present in the bundled rclone v1.74.3 binary.
 count_run_transfers() {
     _cnt_sent=0; _cnt_recv=0; _cnt_mod=0; _cnt_del=0
     [ -f "$RCLONE_LOG" ] || return 0

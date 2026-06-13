@@ -1,0 +1,32 @@
+# test/mutate.equiv — вет­тированные ЭКВИВАЛЕНТНЫЕ мутанты для test/mutate.sh.
+#
+# Формат: file:line:label  # причина эквивалентности
+# Эти мутанты НЕ меняют наблюдаемое поведение, поэтому ни один тест их не убьёт
+# (классическая проблема эквивалентных мутантов — в общем случае неразрешима).
+# Каждый разобран вручную и исключён из ЗНАМЕНАТЕЛЯ mutation score.
+#
+# ВАЖНО: номера строк привязаны к ТЕКУЩЕМУ коду common.sh/yandex-disk. При правке
+# этих файлов список пересмотреть (как golden-снимки). Не добавлять сюда мутанта,
+# который на деле выявляет пробел теста — сначала писать тест.
+
+# --- return 0 -> return 1 в функциях, чей КОД ВОЗВРАТА не потребляется ---------
+# (идиома shell: helper зовут ради side-effect, $? игнорируется)
+spk/package/common.sh:33:ret:0>1         # cfg(): LOCAL=$(cfg dir) — rc отбрасывается
+spk/package/common.sh:43:ret:0>1         # rotate_log(): зовётся как statement, rc не нужен
+spk/package/common.sh:45:ret:0>1         # rotate_log(): нечисловой размер -> ранний выход, rc не нужен
+spk/package/common.sh:47:ret:0>1         # rotate_log(): финальный return, rc не нужен
+spk/package/yandex-disk:36:ret:0>1       # resolve_remote(): rc игнорируется (load_cfg)
+spk/package/yandex-disk:38:ret:0>1       # resolve_remote(): ранний выход, REMOTE не меняется; rc не нужен
+spk/package/yandex-disk:77:ret:0>1       # rclone_version(): cache-hit печатает то же; rc игнорируется
+spk/package/yandex-disk:95:ret:0>1       # maybe_clean_local(): rc игнорируется
+spk/package/yandex-disk:97:ret:0>1       # maybe_clean_local(): rc игнорируется
+spk/package/yandex-disk:99:ret:0>1       # maybe_clean_local(): финальный return, rc не нужен
+spk/package/yandex-disk:135:ret:0>1      # count_run_transfers(): rc игнорируется (write_sync_state)
+spk/package/yandex-disk:145:ret:0>1      # count_run_transfers(): финальный return, rc не нужен
+
+# --- && / || без наблюдаемого эффекта в герметике -----------------------------
+spk/package/yandex-disk:97:logic:and>or  # maybe_clean: LOCAL всегда каталог (sync делает mkdir -p)
+spk/package/yandex-disk:161:logic:and>or # косметический ведущий перевод строки перед заголовком лога
+spk/package/yandex-disk:174:logic:and>or # _out пуст в герметике (fake-rclone пишет в --log-file, не в stdout)
+spk/package/yandex-disk:205:logic:and>or # косметический ведущий перевод строки перед записью skip
+spk/package/yandex-disk:247:logic:or>and # ветка read недостижима без tty ([ -t 0 ] ложно)
