@@ -24,6 +24,16 @@ spk/INFO                      text eol=lf
 spk/conf/privilege            text eol=lf
 spk/conf/resource             text eol=lf
 
+# Прочие УПАКОВЫВАЕМЫЕ текстовые файлы (лицензии, UI-ассеты): не shell, но
+# попадают в .spk. CRLF на autocrlf-чекауте делал .spk НЕвоспроизводимым
+# относительно CI (расширение урока Д-7 на не-скрипты).
+spk/LICENSE                   text eol=lf
+spk/LICENSE.rclone            text eol=lf
+spk/package/ui/config         text eol=lf
+*.js                          text eol=lf
+*.css                         text eol=lf
+*.html                        text eol=lf
+
 # Binaries must never be touched by line-ending normalization.
 spk/package/rclone            binary
 spk/package/*.backup          binary

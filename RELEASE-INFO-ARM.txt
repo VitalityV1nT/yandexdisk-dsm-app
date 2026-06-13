@@ -4,7 +4,7 @@
 
 Package           : YandexDisk
 Display name      : Yandex Disk (ARM)
-Version           : 1.2.2  (SemVer; "ARM" в displayname, т.к. версия для DSM — только числовая. См. CHANGELOG-ARM.md -> «Версионирование»)
+Version           : 1.2.3  (SemVer; "ARM" в displayname, т.к. версия для DSM — только числовая. См. CHANGELOG-ARM.md -> «Версионирование»)
 Build date        : 2026-06-13
 DSM minimum       : 7.0-40000
 
@@ -40,9 +40,9 @@ rtd1619b rtd1296 armada37xx armada38x alpine4k
 ----------------------------------------------------------------
 ARTIFACT
 ----------------------------------------------------------------
-File              : YandexDisk-ARM-1.2.2.spk   (GitHub Release asset — НЕ в git)
-Size              : 24330240 bytes (~23 MB)
-SHA-256 (.spk)    : 7a57daebfdf891eb8466eca41fbd24069c83c0fb3cd70a2d5d04f145fb17e0eb
+File              : YandexDisk-ARM-1.2.3.spk   (GitHub Release asset — НЕ в git)
+Size              : 24340480 bytes (~23 MB)
+SHA-256 (.spk)    : 8b3d37302194c5723f42a10d038eb583012e19dd88da4218a9b6d3229f585a7f
 SHA-256 (rclone)  : 646d2db7e701a4d41d39ed38a71f63373ab051b270ee5f0d6ae14b24cc17c923
 
 Имя файла .spk     : содержит версию (YandexDisk-ARM-<версия>.spk) — собирается
@@ -54,12 +54,12 @@ SHA-256 (rclone)  : 646d2db7e701a4d41d39ed38a71f63373ab051b270ee5f0d6ae14b24cc17
                     так что этот SHA-256 повторяется при чистой пересборке.
 
 Verify:
-    sha256sum -c YandexDisk-ARM-1.2.2.spk.sha256
+    sha256sum -c YandexDisk-ARM-1.2.3.spk.sha256
 
 ----------------------------------------------------------------
 QUICK INSTALL
 ----------------------------------------------------------------
-1. DSM -> Package Center -> Manual Install -> upload YandexDisk-ARM-1.2.2.spk.
+1. DSM -> Package Center -> Manual Install -> upload YandexDisk-ARM-1.2.3.spk.
    (On the warning about an unknown publisher, confirm install.)
 2. After install, grant the system user `sc-yandexdisk` read/write on your
    sync shared folder (Control Panel -> Shared Folder -> Edit -> Permissions).

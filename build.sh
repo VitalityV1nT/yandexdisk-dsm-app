@@ -109,6 +109,22 @@ for f in $POSIX_SH; do
 done
 echo "  ok (lf)   no CRLF in POSIX_SH scripts"
 
+# CRLF gate, broadened: every TEXT file that goes INTO the .spk (not just the
+# POSIX_SH scripts) must be LF. A CRLF-tainted LICENSE / UI asset on an
+# autocrlf checkout doesn't break dash, but changes the packed bytes and made
+# the .spk NON-reproducible vs CI (lesson Д-7, extended). `grep -I` skips
+# binaries (rclone, *.PNG) automatically; *.backup are local artifacts.
+CRLF_HITS="$(grep -rIl --exclude='*.backup' "$CR" \
+    spk/INFO spk/LICENSE spk/LICENSE.rclone spk/conf spk/scripts spk/package 2>/dev/null || true)"
+if [ -n "$CRLF_HITS" ]; then
+    echo "ERROR: CRLF line endings in packaged text file(s):" >&2
+    echo "$CRLF_HITS" | sed 's/^/  - /' >&2
+    echo "  Fix: pin the path in .gitattributes ('… text eol=lf'), then re-checkout:" >&2
+    echo "       git rm --cached <file> >/dev/null && git checkout -- <file>" >&2
+    exit 1
+fi
+echo "  ok (lf)   no CRLF in packaged text files"
+
 # Plain for-loop (no pipe subshell): under set -e a syntax error aborts the build.
 for f in $POSIX_SH; do "$SH_POSIX" -n "$f"; echo "  ok (sh)   $f"; done
 
@@ -163,9 +179,14 @@ tar -C spk/package --sort=name --mtime="@${SOURCE_DATE_EPOCH}" --owner=0 --group
     --exclude='*.backup' -cf - . | gzip -n -9 > "$PKG_TGZ"
 
 echo "==> Build $SPK (GNU tar, root-owned, reproducible)"
-# Keep INFO first (DSM reads it from the stream); --mtime pins timestamps so a clean
-# rebuild reproduces the same archive and the same SHA-256.
-tar -C spk --format=gnu --mtime="@${SOURCE_DATE_EPOCH}" --owner=0 --group=0 --numeric-owner -cf "$ROOT/$SPK" \
+# --sort=name makes the directory recursion (conf/, scripts/) deterministic:
+# without it tar stores entries in filesystem readdir order, which differs
+# across machines (WSL vs CI ext4) and silently broke cross-host reproducibility
+# (check-reproducible.sh can't catch it — same machine = same readdir order).
+# INFO is the lexicographically smallest name (under LC_ALL=C), so it STILL ends
+# up first in the stream, preserving the DSM "INFO first" contract. --mtime pins
+# timestamps so a clean rebuild reproduces the same archive and the same SHA-256.
+tar -C spk --format=gnu --sort=name --mtime="@${SOURCE_DATE_EPOCH}" --owner=0 --group=0 --numeric-owner -cf "$ROOT/$SPK" \
     INFO LICENSE LICENSE.rclone PACKAGE_ICON.PNG PACKAGE_ICON_256.PNG conf scripts package.tgz
 
 echo "==> Checksum"
