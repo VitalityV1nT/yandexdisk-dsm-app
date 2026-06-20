@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Яндекс Диск — макет UI (Synology DSM 7.3.2)</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#c7ccd4;color:#333;font-size:13px;
+       font-family:-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;}
+  .wrap{max-width:1040px;margin:22px auto;padding:0 16px;}
+
+  /* ---- Служебная панель прототипа (НЕ часть продукта) ---- */
+  .proto{background:#2b2f36;color:#cfd3da;border-radius:8px;padding:12px 16px;margin-bottom:18px;}
+  .proto h2{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#9aa1ab;margin:0 0 10px;}
+  .proto .grp{display:inline-flex;align-items:center;gap:6px;margin:0 18px 8px 0;}
+  .proto .grp b{font-weight:600;color:#e6e9ee;margin-right:4px;font-size:12px;}
+  .proto button{background:#3a3f48;color:#e6e9ee;border:1px solid #4a505a;border-radius:4px;
+                padding:5px 10px;cursor:pointer;font-size:12px;font-family:inherit;}
+  .proto button:hover{background:#454b55;}
+  .proto button.on{background:#2d7fd9;border-color:#2d7fd9;color:#fff;}
+  .proto button:disabled{opacity:.4;cursor:default;}
+
+  /* ---- Окно DSM ---- */
+  .dsm-window{position:relative;width:960px;height:600px;background:#fff;border-radius:6px;
+              box-shadow:0 16px 50px rgba(0,0,0,.32);overflow:hidden;display:flex;flex-direction:column;}
+  .titlebar{height:38px;flex:0 0 38px;display:flex;align-items:center;gap:8px;padding:0 8px 0 12px;
+            background:linear-gradient(#fafafa,#eef0f2);border-bottom:1px solid #dcdfe3;}
+  .app-ic{width:22px;height:22px;border-radius:50%;background:#2d7fd9;display:flex;
+          align-items:center;justify-content:center;color:#fff;}
+  .app-ic .ic{width:13px;height:13px;}
+  .ttl{font-weight:600;color:#444;font-size:13px;}
+  .win-ctrls{margin-left:auto;display:flex;align-items:center;gap:2px;color:#8a8f95;}
+  .win-ctrls span{width:28px;height:26px;display:flex;align-items:center;justify-content:center;
+                  border-radius:4px;cursor:default;font-size:13px;}
+  .win-ctrls span:hover{background:#e3e6ea;}
+  .win-ctrls .cl:hover{background:#e8473f;color:#fff;}
+
+  .win-body{flex:1;display:flex;min-height:0;}
+
+  /* ---- Боковая панель ---- */
+  .sidebar{width:216px;flex:0 0 216px;background:#f4f5f6;border-right:1px solid #e2e4e7;
+           display:flex;flex-direction:column;min-height:0;}
+  .sb-toolbar{display:flex;gap:8px;padding:10px;border-bottom:1px solid #e6e8ea;}
+  .tool-btn{width:36px;height:30px;border-radius:4px;border:1px solid #d6d9dd;background:#fff;
+            display:flex;align-items:center;justify-content:center;color:#5a6068;cursor:pointer;}
+  .tool-btn:hover{background:#eef1f4;}
+  .tool-btn.primary{background:#2d7fd9;border-color:#2d7fd9;color:#fff;}
+  .tool-btn.primary:hover{background:#256fc4;}
+  .tool-btn.disabled{opacity:.5;cursor:not-allowed;background:#eef0f2;color:#a3a8ad;border-color:#e2e4e7;}
+  .tool-btn .ic{width:18px;height:18px;}
+  .folder-list{flex:1;overflow:auto;padding:6px;}
+  .folder-item{display:flex;align-items:center;gap:9px;padding:9px 8px;border-radius:4px;
+               cursor:pointer;margin-bottom:2px;}
+  .folder-item:hover{background:#ebedef;}
+  .folder-item.active{background:#e1effb;box-shadow:inset 3px 0 0 #2d7fd9;}
+  .fi-icon .ic{width:18px;height:18px;color:#7b828a;}
+  .fi-name{flex:1;font-size:13px;color:#3a3f45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+  /* ---- Бейджи статуса ---- */
+  .badge{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;
+         justify-content:center;flex:0 0 18px;color:#fff;}
+  .badge .ic{width:11px;height:11px;stroke-width:3.2;}
+  .st-success{background:#43b14b;} .st-warning{background:#f0a020;}
+  .st-error{background:#e24c3d;}   .st-syncing{background:#2d8cf0;}
+  .big-badge{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;
+             justify-content:center;color:#fff;flex:0 0 52px;}
+  .big-badge .ic{width:28px;height:28px;stroke-width:3;}
+  .spinner{width:12px;height:12px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;
+           border-radius:50%;animation:spin .8s linear infinite;display:inline-block;}
+  .spinner.big{width:26px;height:26px;border-width:3px;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ---- Основная область ---- */
+  .detail{flex:1;background:#ececec;padding:16px;overflow:auto;display:flex;
+          flex-direction:column;gap:16px;min-width:0;}
+  .card{background:#fff;border:1px solid #e3e5e8;border-radius:6px;padding:18px 20px;}
+  .header-card{display:flex;gap:18px;align-items:flex-start;}
+  .hc-body{flex:1;min-width:0;}
+  .hc-title{font-size:20px;font-weight:600;color:#2c2f33;margin-bottom:6px;}
+  .muted{color:#6b7178;margin:2px 0;}
+  .link{color:#2d7fd9;cursor:pointer;text-decoration:none;}
+  .link:hover{text-decoration:underline;}
+  .note-warn{color:#a9740a;margin:5px 0;}
+  .note-err{color:#cf3b2e;margin:5px 0;}
+  .hc-actions{display:flex;align-items:center;gap:8px;margin-top:15px;flex-wrap:wrap;}
+  .btn{border:none;border-radius:4px;padding:8px 14px;font-size:13px;cursor:pointer;
+       display:inline-flex;align-items:center;gap:7px;font-family:inherit;}
+  .btn .ic{width:15px;height:15px;}
+  .btn-primary{background:#2d7fd9;color:#fff;}
+  .btn-primary:hover{background:#256fc4;}
+  .btn-primary:disabled{background:#a9c8ec;cursor:default;}
+  .btn-secondary{background:#fff;border:1px solid #cdd1d6;color:#444;}
+  .btn-secondary:hover{background:#f2f4f6;}
+  .btn-ghost{background:transparent;border:1px solid #e0c98a;color:#a9740a;}
+  .icon-btn{width:34px;height:34px;border-radius:4px;border:1px solid #d6d9dd;background:#fff;
+            color:#5a6068;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;}
+  .icon-btn:hover{background:#eef1f4;}
+  .icon-btn .ic{width:17px;height:17px;}
+  .icon-btn.danger:hover{background:#fdecea;color:#cf3b2e;border-color:#f3c0ba;}
+
+  .detail-bottom{display:flex;gap:16px;align-items:stretch;}
+  .detail-bottom .card{flex:1;display:flex;flex-direction:column;}
+  .card-title{font-size:15px;font-weight:600;color:#2c2f33;margin-bottom:14px;
+              padding-bottom:10px;border-bottom:1px solid #eef0f2;}
+  .kv{display:flex;margin:9px 0;font-size:13px;gap:12px;}
+  .kv .k{color:#8a9098;flex:0 0 46%;}
+  .kv .v{color:#3a3f45;flex:1;word-break:break-word;}
+  .ok{color:#3a9d42;} .bad{color:#cf3b2e;}
+  .card-foot{margin-top:auto;padding-top:14px;}
+
+  /* ---- Пустое состояние (первый запуск) ---- */
+  .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+               text-align:center;color:#6b7178;gap:8px;}
+  .empty-illu{position:relative;color:#c2c7cd;margin-bottom:6px;}
+  .empty-illu .ic{width:84px;height:84px;}
+  .empty-plus{position:absolute;right:-8px;bottom:-2px;background:#2d7fd9;color:#fff;border-radius:50%;
+              width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:3px solid #ececec;}
+  .empty-plus .ic{width:16px;height:16px;}
+  .empty-title{font-size:18px;font-weight:600;color:#3a3f45;}
+  .empty-text{max-width:400px;line-height:1.5;}
+  .empty-state .btn{margin-top:10px;}
+
+  /* ---- Модальные окна ---- */
+  .overlay{position:absolute;inset:0;background:rgba(20,24,28,.4);display:flex;
+           align-items:center;justify-content:center;z-index:20;}
+  .modal{width:580px;max-height:90%;background:#fff;border-radius:8px;
+         box-shadow:0 20px 60px rgba(0,0,0,.4);display:flex;flex-direction:column;overflow:hidden;}
+  .modal-head{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid #e8eaed;
+              font-weight:600;font-size:15px;color:#2c2f33;}
+  .modal-head .x{margin-left:auto;border:none;background:none;font-size:15px;color:#9aa0a6;
+                 cursor:pointer;width:26px;height:26px;border-radius:4px;}
+  .modal-head .x:hover{background:#eef0f2;color:#555;}
+  .modal-body{padding:18px;overflow:auto;}
+  .modal-foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 18px;
+              border-top:1px solid #e8eaed;background:#fafbfc;}
+  .frow{margin-bottom:16px;}
+  .frow>label{display:block;font-weight:600;margin-bottom:6px;color:#3a3f45;}
+  input[type=text],input[type=number],textarea{width:100%;border:1px solid #cdd1d6;border-radius:4px;
+              padding:8px 10px;font-size:13px;font-family:inherit;color:#333;}
+  textarea{resize:vertical;}
+  input:focus,textarea:focus{outline:none;border-color:#2d7fd9;box-shadow:0 0 0 2px rgba(45,127,217,.18);}
+  .inline{display:flex;gap:8px;} .inline input{flex:1;}
+  .inline-between{display:flex;justify-content:space-between;gap:8px;margin-top:8px;}
+  .hint{font-size:12px;color:#8a9098;margin-top:6px;line-height:1.45;}
+  code{background:#f1f3f5;border:1px solid #e4e7ea;border-radius:3px;padding:1px 5px;
+       font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:#456;}
+  .ok-hint{color:#3a9d42;}
+  .section-title{font-weight:600;color:#2c2f33;margin:20px 0 10px;padding-top:14px;border-top:1px solid #eef0f2;}
+  .switch-row{display:flex;align-items:center;justify-content:space-between;gap:16px;}
+  .switch{position:relative;display:inline-block;width:42px;height:24px;flex:0 0 42px;}
+  .switch input{display:none;}
+  .slider{position:absolute;inset:0;background:#c6cbd1;border-radius:24px;transition:.2s;}
+  .slider:before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;
+                 border-radius:50%;transition:.2s;}
+  .switch input:checked+.slider{background:#2d7fd9;}
+  .switch input:checked+.slider:before{transform:translateX(18px);}
+  .radio{display:flex;align-items:center;gap:8px;margin:8px 0;color:#3a3f45;}
+  .num{width:64px !important;display:inline-block;}
+  .pill{background:#fff3d6;color:#a9740a;border:1px solid #ecd49a;border-radius:10px;
+        padding:1px 8px;font-size:11px;font-weight:600;}
+  .connected-box{background:#eef8ef;border:1px solid #cfe9d1;border-radius:5px;padding:10px 12px;
+                 color:#3a9d42;margin-bottom:10px;}
+  .sched-hint{background:#f7f9fa;border:1px solid #e8ebee;border-radius:5px;padding:8px 10px;margin:4px 0 12px;
+              font-size:12px;color:#6b7178;line-height:1.5;}
+  pre.log{background:#1e2227;color:#cdd3da;border-radius:5px;padding:12px;
+          font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.55;
+          overflow:auto;max-height:340px;white-space:pre-wrap;}
+  table.hist{width:100%;border-collapse:collapse;font-size:12.5px;}
+  table.hist th,table.hist td{text-align:left;padding:8px 10px;border-bottom:1px solid #eef0f2;}
+  table.hist th{color:#8a9098;font-weight:600;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ===== Служебная панель прототипа — НЕ часть продукта ===== -->
+  <div class="proto">
+    <h2>● Служебная панель прототипа — не часть продукта</h2>
+    <div class="grp"><b>Статус выбранной папки:</b>
+      <button data-st="success" onclick="setStatus('success')">Успешно</button>
+      <button data-st="warning" onclick="setStatus('warning')">Предупреждение</button>
+      <button data-st="error"   onclick="setStatus('error')">Ошибка</button>
+      <button data-st="syncing" onclick="setStatus('syncing')">Синхронизация…</button>
+    </div>
+    <div class="grp"><b>Экран:</b>
+      <button id="scrMain"  onclick="showScreen('main')">Главный (несколько папок)</button>
+      <button id="scrEmpty" onclick="showScreen('empty')">Первый запуск (пусто)</button>
+    </div>
+    <div class="grp"><b>Окна:</b>
+      <button onclick="openDialog('add')">Диалог: Добавить</button>
+      <button onclick="openDialog('edit')">Диалог: Редактировать</button>
+      <button onclick="openLog()">Журнал rclone</button>
+      <button onclick="openHistory()">История</button>
+    </div>
+    <div class="grp"><button onclick="resetProto()">↺ Сброс</button></div>
+  </div>
+
+  <!-- ===== Окно приложения DSM ===== -->
+  <div class="dsm-window">
+    <div class="titlebar">
+      <span class="app-ic" id="appIc"></span>
+      <span class="ttl">Яндекс Диск</span>
+      <span class="win-ctrls"><span>?</span><span>—</span><span>▢</span><span class="cl">✕</span></span>
+    </div>
+    <div class="win-body">
+      <div class="sidebar">
+        <div class="sb-toolbar">
+          <button class="tool-btn" id="btnAdd" onclick="onAdd()"></button>
+          <button class="tool-btn" id="btnLog" title="Журнал rclone" onclick="openLog()"></button>
+        </div>
+        <div class="folder-list" id="folderList"></div>
+      </div>
+      <div class="detail" id="detail"></div>
+    </div>
+    <div id="modalRoot" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---- Иконки (Feather, MIT), отрисовка через currentColor ----
+  function svg(inner, cls){
+    return '<svg class="ic '+(cls||'')+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+         + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+inner+'</svg>';
+  }
+  const I = {
+    folder:'<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+    plus:'<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+    log:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+    sync:'<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+    clock:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+    trash:'<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>',
+    check:'<polyline points="20 6 9 17 4 12"/>',
+    cross:'<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+    warn:'<line x1="12" y1="5" x2="12" y2="14"/><line x1="12" y1="18" x2="12" y2="18.01"/>',
+    cloud:'<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>'
+  };
+
+  const STATUS = {
+    success:{label:'Успешно',             cls:'st-success', g:I.check},
+    warning:{label:'Предупреждение',      cls:'st-warning', g:I.warn},
+    error:  {label:'Ошибка синхронизации',cls:'st-error',   g:I.cross},
+    syncing:{label:'Синхронизация…',      cls:'st-syncing', g:null}
+  };
+
+  function initFolders(){
+    return [
+      {id:'docs', name:'Документы', status:'success',
+       dir:'/volume1/homes/admin/Документы', owner:'admin', remote:'yandexdisk:', sub:'/Документы',
+       connected:true, cleanThumbs:true, schedule:'Планировщик задач DSM', interval:null,
+       last:'20.06.2026 - 02:00', sent:128, received:14, modified:7, deleted:2},
+      {id:'photo', name:'Фотографии', status:'warning',
+       dir:'/volume1/photo', owner:'PhotoStation', remote:'yandexdisk:', sub:'/Фото',
+       connected:true, cleanThumbs:false, schedule:'Каждые 60 минут', interval:60,
+       last:'20.06.2026 - 01:30', sent:54, received:0, modified:3, deleted:0,
+       note:'Часть файлов пропущена: 2 файла открыты другим процессом.'},
+      {id:'proj', name:'Рабочие проекты', status:'error',
+       dir:'/volume1/projects', owner:'admin', remote:'yandexdisk:', sub:'/Projects',
+       connected:true, cleanThumbs:true, schedule:'Планировщик задач DSM', interval:null,
+       last:'20.06.2026 - 00:00', sent:0, received:0, modified:0, deleted:0,
+       error:'Не удалось подключиться к Яндекс Диску: превышено время ожидания.'}
+    ];
+  }
+
+  let folders = initFolders();
+  let selectedId = 'docs';
+  let emptyMode = false;
+
+  // ---- Бейджи ----
+  function badge(st){
+    if(st==='syncing') return '<span class="badge st-syncing"><span class="spinner"></span></span>';
+    return '<span class="badge '+STATUS[st].cls+'">'+svg(STATUS[st].g)+'</span>';
+  }
+  function bigBadge(st){
+    if(st==='syncing') return '<div class="big-badge st-syncing"><span class="spinner big"></span></div>';
+    return '<div class="big-badge '+STATUS[st].cls+'">'+svg(STATUS[st].g)+'</div>';
+  }
+  function kv(k,v){ return '<div class="kv"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>'; }
+
+  // ---- Верхняя карточка (шапка статуса) ----
+  function headerCard(f){
+    const st = STATUS[f.status]; let lines='';
+    if(f.status==='success'){
+      lines = '<div class="muted">Последняя синхронизация: <a class="link">'+f.last+'</a></div>'
+            + '<div class="muted">Следующая синхронизация: '+nextLine(f)+'</div>';
+    } else if(f.status==='warning'){
+      lines = '<div class="muted">Последняя синхронизация: <a class="link">'+f.last+'</a></div>'
+            + '<div class="note-warn">⚠ '+(f.note||'')+'</div>';
+    } else if(f.status==='error'){
+      lines = '<div class="muted">Последняя попытка: '+f.last+'</div>'
+            + '<div class="note-err">'+(f.error||'')+'</div>'
+            + '<div style="margin-top:4px"><a class="link" onclick="YD.openLog()">Подробнее в журнале rclone →</a></div>';
+    } else {
+      lines = '<div class="muted">Идёт синхронизация с Яндекс Диском…</div>'
+            + '<div class="muted">Отправлено '+f.sent+' · Получено '+f.received+'</div>';
+    }
+    const dis = f.status==='syncing' ? 'disabled' : '';
+    return '<div class="card header-card">'
+      + bigBadge(f.status)
+      + '<div class="hc-body">'
+      +   '<div class="hc-title">'+st.label+'</div>'
+      +   lines
+      +   '<div class="hc-actions">'
+      +     '<button class="btn btn-primary" '+dis+' onclick="YD.doSync()">'+svg(I.sync)+' Синхронизировать сейчас</button>'
+      +     '<button class="icon-btn" title="История синхронизации" onclick="YD.openHistory()">'+svg(I.clock)+'</button>'
+      +     '<button class="icon-btn" title="Настройка" onclick="YD.openDialog(\'edit\')">'+svg(I.gear)+'</button>'
+      +     '<button class="icon-btn danger" title="Удалить" onclick="YD.confirmDelete()">'+svg(I.trash)+'</button>'
+      +   '</div>'
+      + '</div></div>';
+  }
+  function nextLine(f){
+    return f.interval ? 'через '+f.interval+' мин (по расписанию пакета)'
+                      : 'по расписанию Планировщика задач DSM';
+  }
+
+  // ---- Нижние карточки ----
+  function bottomCards(f){
+    return '<div class="detail-bottom">'
+      + '<div class="card">'
+      +   '<div class="card-title">Папка</div>'
+      +   kv('Локальная папка', f.dir)
+      +   kv('Владелец', f.owner)
+      +   kv('Подключение к Яндекс Диску', f.connected
+            ? '<span class="ok">Подключено ✓</span>' : '<span class="bad">Не подключено</span>')
+      + '</div>'
+      + '<div class="card">'
+      +   '<div class="card-title">Настройки синхронизации</div>'
+      +   kv('Удалённый ресурс', f.remote+(f.sub||''))
+      +   kv('Чистка thumbs', f.cleanThumbs?'Вкл.':'Выкл.')
+      +   kv('Расписание', f.schedule)
+      +   kv('Последний результат',
+            'Отправлено: '+f.sent+' · Получено: '+f.received+' · Изменено: '+f.modified+' · Удалено: '+f.deleted)
+      +   '<div class="card-foot"><button class="btn btn-secondary" onclick="YD.openDialog(\'edit\')">Настройка задачи</button></div>'
+      + '</div>'
+      + '</div>';
+  }
+
+  // ---- Пустое состояние (первый запуск) ----
+  function emptyState(){
+    return '<div class="empty-state">'
+      + '<div class="empty-illu">'+svg(I.folder)+'<span class="empty-plus">'+svg(I.plus)+'</span></div>'
+      + '<div class="empty-title">Папок пока нет</div>'
+      + '<div class="empty-text">Нажмите «Добавить папку», чтобы настроить первую синхронизацию '
+      + 'с Яндекс Диском — полностью из интерфейса, без SSH.</div>'
+      + '<button class="btn btn-primary" onclick="YD.openDialog(\'add\')">'+svg(I.plus)+' Добавить папку</button>'
+      + '</div>';
+  }
+
+  // ---- Диалог добавить/редактировать ----
+  function dialogHTML(mode){
+    const edit = (mode==='edit' && !emptyMode);
+    const f = edit ? folders.find(x=>x.id===selectedId) : null;
+    const title = edit ? 'Настройка папки' : 'Добавить папку';
+    const remoteVal = f ? (f.remote+(f.sub||'')) : 'yandexdisk:';
+    return '<div class="overlay" onclick="if(event.target===this)YD.closeModal()"><div class="modal">'
+      + '<div class="modal-head"><span>'+title+'</span><button class="x" onclick="YD.closeModal()">✕</button></div>'
+      + '<div class="modal-body">'
+      +   '<div class="frow"><label>Локальная папка</label>'
+      +     '<div class="inline"><input type="text" value="'+(f?f.dir:'')+'" placeholder="/volume1/…">'
+      +       '<button class="btn btn-secondary" onclick="return false">Обзор…</button></div>'
+      +     '<div class="hint ok-hint">✓ Папка существует и доступна для записи пользователю sc-yandexdisk</div>'
+      +   '</div>'
+      +   '<div class="frow"><label>Удалённый ресурс</label>'
+      +     '<input type="text" value="'+remoteVal+'">'
+      +     '<div class="hint">Имя ресурса <code>yandexdisk</code> фиксировано. Можно указать подпапку: '
+      +       '<code>yandexdisk:/Backup</code>.</div>'
+      +   '</div>'
+      +   '<div class="frow switch-row">'
+      +     '<div><label style="margin:0">Чистка thumbs</label>'
+      +       '<div class="hint" style="margin-top:2px">Удалять эскизы (@eaDir / thumbs) перед синхронизацией</div></div>'
+      +     '<label class="switch"><input type="checkbox" '+(f&&f.cleanThumbs?'checked':'')+'><span class="slider"></span></label>'
+      +   '</div>'
+      +   '<div class="section-title">Подключение к Яндекс Диску</div>'
+      +   (f&&f.connected
+            ? '<div class="connected-box">Подключено ✓ &nbsp; '
+              + '<a class="link" onclick="document.getElementById(\'tokArea\').style.display=\'block\';this.style.display=\'none\'">Заменить токен</a></div>'
+            : '')
+      +   '<div id="tokArea" '+(f&&f.connected?'style="display:none"':'')+'>'
+      +     '<div class="hint">На компьютере с браузером выполните <code>rclone authorize "yandex"</code> '
+      +       'и вставьте сюда строку вида <code>{ … }</code>.</div>'
+      +     '<textarea rows="3" placeholder=\'{"access_token":"…","token_type":"bearer","expiry":"…"}\'></textarea>'
+      +     '<div class="inline-between">'
+      +       '<button class="btn btn-secondary" onclick="return false">Подключить</button>'
+      +       '<button class="btn btn-ghost" onclick="return false">Войти через Яндекс <span class="pill">вне MVP</span></button>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div class="section-title">Расписание</div>'
+      +   '<label class="radio"><input type="radio" name="sched" checked> Вручную / по Планировщику задач DSM</label>'
+      +   '<div class="sched-hint">Рекомендуется. Создайте задачу в «Планировщик задач» DSM с командой:<br>'
+      +     '<code>sudo -u sc-yandexdisk /usr/local/bin/yandex-disk sync</code></div>'
+      +   '<label class="radio"><input type="radio" name="sched"> Каждые '
+      +     '<input type="number" class="num" value="60" min="5"> минут <span class="pill">вне MVP</span></label>'
+      + '</div>'
+      + '<div class="modal-foot">'
+      +   '<button class="btn btn-secondary" onclick="YD.closeModal()">Отмена</button>'
+      +   '<button class="btn btn-primary" onclick="YD.closeModal()">Сохранить</button>'
+      + '</div>'
+      + '</div></div>';
+  }
+
+  // ---- Журнал rclone (использует контрактные маркеры лога) ----
+  function logHTML(){
+    const t =
+'2026/06/20 02:00:01 ===== sync started =====\n'+
+'2026/06/20 02:00:01 INFO : Synchronizing bisync "/volume1/homes/admin/Документы" <-> "yandexdisk:/Документы"\n'+
+'2026/06/20 02:00:03 INFO : - Path2    Queue copy to Path1 - отчёт.docx\n'+
+'2026/06/20 02:00:04 INFO : - Path1    Queue copy to Path2 - презентация.pptx\n'+
+'2026/06/20 02:00:05 INFO : - Path1    Copied (replaced existing) - бюджет.xlsx\n'+
+'2026/06/20 02:00:06 INFO : - Path2    Queue delete - ~$черновик.tmp\n'+
+'2026/06/20 02:00:09 INFO : Bisync successful\n'+
+'2026/06/20 02:00:09 ===== sync finished: ok (sent=128 received=14 modified=7 deleted=2) =====';
+    return '<div class="overlay" onclick="if(event.target===this)YD.closeModal()">'
+      + '<div class="modal" style="width:680px">'
+      + '<div class="modal-head"><span>Журнал rclone — последняя синхронизация</span>'
+      +   '<button class="x" onclick="YD.closeModal()">✕</button></div>'
+      + '<div class="modal-body"><pre class="log">'+t+'</pre></div>'
+      + '</div></div>';
+  }
+
+  // ---- История синхронизации ----
+  function historyHTML(){
+    const f = (!emptyMode && folders.find(x=>x.id===selectedId)) || {name:'Документы'};
+    return '<div class="overlay" onclick="if(event.target===this)YD.closeModal()"><div class="modal">'
+      + '<div class="modal-head"><span>История синхронизации — '+f.name+'</span>'
+      +   '<button class="x" onclick="YD.closeModal()">✕</button></div>'
+      + '<div class="modal-body"><table class="hist">'
+      + '<thead><tr><th>Дата и время</th><th>Статус</th><th>Отпр.</th><th>Получ.</th><th>Изм.</th><th>Удал.</th></tr></thead>'
+      + '<tbody>'
+      + '<tr><td>20.06.2026 - 02:00</td><td><span class="ok">Успешно</span></td><td>128</td><td>14</td><td>7</td><td>2</td></tr>'
+      + '<tr><td>19.06.2026 - 02:00</td><td><span class="ok">Успешно</span></td><td>40</td><td>2</td><td>1</td><td>0</td></tr>'
+      + '<tr><td>18.06.2026 - 02:00</td><td style="color:#a9740a">Предупреждение</td><td>5</td><td>0</td><td>0</td><td>0</td></tr>'
+      + '<tr><td>17.06.2026 - 02:00</td><td><span class="ok">Успешно</span></td><td>12</td><td>9</td><td>3</td><td>1</td></tr>'
+      + '</tbody></table></div></div></div>';
+  }
+
+  // ---- Рендер ----
+  function render(){
+    document.getElementById('appIc').innerHTML = svg(I.cloud);
+    document.getElementById('btnLog').innerHTML = svg(I.log);
+
+    const add = document.getElementById('btnAdd');
+    add.innerHTML = svg(I.plus);
+    add.classList.toggle('disabled', !emptyMode);   // правило v1: «+» неактивна при наличии папки
+    add.classList.toggle('primary', emptyMode);
+    add.title = emptyMode ? 'Добавить папку' : 'В этой версии поддерживается одна папка';
+
+    const list = document.getElementById('folderList');
+    list.innerHTML = emptyMode ? '' : folders.map(f =>
+      '<div class="folder-item '+(f.id===selectedId?'active':'')+'" data-id="'+f.id+'">'
+      + '<span class="fi-icon">'+svg(I.folder)+'</span>'
+      + '<span class="fi-name">'+f.name+'</span>'+badge(f.status)+'</div>').join('');
+
+    const d = document.getElementById('detail');
+    if(emptyMode){ d.innerHTML = emptyState(); }
+    else { const f = folders.find(x=>x.id===selectedId); d.innerHTML = headerCard(f)+bottomCards(f); }
+
+    updateProto();
+  }
+
+  function updateProto(){
+    const f = emptyMode ? null : folders.find(x=>x.id===selectedId);
+    document.querySelectorAll('.proto [data-st]').forEach(b=>{
+      b.classList.toggle('on', !!f && b.dataset.st===f.status);
+      b.disabled = emptyMode;
+    });
+    document.getElementById('scrMain').classList.toggle('on', !emptyMode);
+    document.getElementById('scrEmpty').classList.toggle('on', emptyMode);
+  }
+
+  // ---- Действия ----
+  function showModal(html){ const r=document.getElementById('modalRoot'); r.innerHTML=html; r.style.display='block'; }
+  const YD = {
+    openDialog(m){ showModal(dialogHTML(m)); },
+    openLog(){ showModal(logHTML()); },
+    openHistory(){ showModal(historyHTML()); },
+    closeModal(){ const r=document.getElementById('modalRoot'); r.style.display='none'; r.innerHTML=''; },
+    doSync(){
+      const f=folders.find(x=>x.id===selectedId); if(!f) return;
+      f.status='syncing'; render();
+      setTimeout(()=>{ f.status='success'; f.last='20.06.2026 - 14:05'; render(); }, 2600);
+    },
+    confirmDelete(){
+      const f=folders.find(x=>x.id===selectedId); if(!f) return;
+      if(confirm('Удалить папку «'+f.name+'» из синхронизации?\nФайлы на NAS и Яндекс Диске не удаляются.')){
+        folders=folders.filter(x=>x.id!==f.id);
+        if(folders.length){ selectedId=folders[0].id; emptyMode=false; } else { emptyMode=true; }
+        render();
+      }
+    }
+  };
+  window.YD = YD;
+
+  // ---- Глобальные хелперы панели прототипа ----
+  window.setStatus = function(s){ if(emptyMode) return;
+    const f=folders.find(x=>x.id===selectedId); if(!f) return; f.status=s; render(); };
+  window.showScreen = function(w){ emptyMode = (w==='empty');
+    if(!emptyMode){ if(!folders.length) folders=initFolders(); selectedId=folders[0].id; } render(); };
+  window.resetProto = function(){ folders=initFolders(); selectedId='docs'; emptyMode=false; YD.closeModal(); render(); };
+  window.openLog = YD.openLog; window.openHistory = YD.openHistory; window.openDialog = YD.openDialog;
+  window.onAdd = function(){ if(emptyMode) YD.openDialog('add'); };  // в мульти-режиме «+» неактивна (v1)
+
+  document.getElementById('folderList').addEventListener('click', e=>{
+    const item=e.target.closest('.folder-item'); if(!item) return;
+    selectedId=item.dataset.id; render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
