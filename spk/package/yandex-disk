@@ -183,6 +183,28 @@ run_bisync() {
     return "$_rc"
 }
 
+# Phase 0 privilege spike: can THIS process (= the CGI's euid when invoked from
+# webman) create a file in $1? Prints the throwaway file's perms/owner on success
+# and returns 0; returns 1 if the dir can't be created or written. Read-only w.r.t.
+# secrets: it only touches a ".yd-probe.<pid>" file and NEVER reads rclone.conf.
+probe_dir() {
+    _d="$1"
+    mkdir -p "$_d" 2>/dev/null
+    _pf="$_d/.yd-probe.$$"
+    # `true` (NOT the special built-in `:`): a failed create-redirection on a
+    # special built-in makes POSIX dash EXIT the subshell at the redirection error,
+    # so the explicit `return 1` below would never run and the write verdict would
+    # depend on the shell. With `true` the function's own if/return decides on every
+    # shell. Group-redirect so the raw "cannot create …" can't leak to stderr —
+    # diag.cgi runs us with 2>&1, so that noise would otherwise reach the browser.
+    if { true > "$_pf"; } 2>/dev/null; then
+        ls -ld "$_pf" 2>/dev/null | awk '{print $1, $3, $4}' | tr -d '\n'
+        rm -f "$_pf" 2>/dev/null
+        return 0
+    fi
+    return 1
+}
+
 case "${1:-}" in
     sync)
         ensure_config
@@ -250,6 +272,44 @@ case "${1:-}" in
         exit 0
         ;;
 
+    diag)
+        # Phase 0 spike (CLAUDE.md «проверяется только на реальном NAS»): when this
+        # subcommand is reached THROUGH the CGI (diag.cgi), it runs as the CGI's euid,
+        # so its whoami/id and the write probes below answer the open question of
+        # §3.1 of the migration plan — branch A (CGI writes configs directly) vs
+        # branch B (a privileged intermediary is required).
+        _rcdir=$(dirname "$RCLONE_CONF")
+        echo "=== Yandex Disk (ARM) — Phase 0: диагностика привилегий CGI ==="
+        echo "Назначение: показать euid процесса (= euid CGI при запуске из webman)"
+        echo "и проверить, может ли он писать конфиги пакета без посредника."
+        echo
+        echo "whoami: $(whoami 2>/dev/null || echo '?')"
+        echo "id: $(id 2>/dev/null || echo '?')"
+        echo "euid: $(id -u 2>/dev/null || echo '?')"
+        echo "HOME: $HOME_DIR"
+        echo
+        _ok=0; _tot=0
+        for _t in "$CONF_DIR" "$_rcdir"; do
+            _tot=$((_tot + 1))
+            if _info=$(probe_dir "$_t"); then
+                _ok=$((_ok + 1))
+                echo "Цель: $_t"
+                echo "  запись: ДА (владелец/права пробного файла: $_info)"
+            else
+                echo "Цель: $_t"
+                echo "  запись: НЕТ (нет прав на запись)"
+            fi
+        done
+        echo
+        if [ "$_ok" -eq "$_tot" ]; then
+            echo "Вердикт: WRITABLE — применима ветка A (обёртка пишет конфиги напрямую)."
+        else
+            echo "Вердикт: NOT-WRITABLE ($_ok из $_tot) — нужна ветка B (привилегированный посредник)."
+        fi
+        echo "Дальше: подтвердите euid и ветку (A/B) по CLAUDE.md «остановись и спроси человека»."
+        exit 0
+        ;;
+
     version|--version|-v)
         "$RCLONE" version
         exit $?
@@ -268,7 +328,7 @@ case "${1:-}" in
         ;;
 
     *)
-        echo "Usage: yandex-disk {sync|status|setup|version|rclone <args...>}"
+        echo "Usage: yandex-disk {sync|status|setup|diag|version|rclone <args...>}"
         echo "Periodic sync is configured in DSM Task Scheduler (runs 'yandex-disk sync')."
         exit 1
         ;;

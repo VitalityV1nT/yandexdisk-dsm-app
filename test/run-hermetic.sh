@@ -19,6 +19,9 @@
 #   - провал первого --resync => error/resync-failed (T21);
 #   - вывод/создание config.cfg в setup; без tty не спрашивает (T22);
 #   - is_configured: conf без секции при заданном dir => not configured (T23);
+#   - diag: Phase-0 спайк привилегий — печатает euid (whoami/id) и пробует запись
+#     в home/.config/{yandex-disk,rclone}; вердикт WRITABLE / NOT-WRITABLE (T24/T25),
+#     секрет не утекает в вывод diag (T26), тонкий diag.cgi делегирует в обёртку (T27);
 #   - golden-снимки человекочитаемого вывода (test/golden/).
 #
 # ПОРЯДОК СЦЕНАРИЕВ ЗНАЧИМ: T3 обязан идти ДО T4/T5 — те оставляют в хвосте
@@ -396,6 +399,85 @@ t23_configured_needs_section() {
     ok "rclone.conf без секции, но dir задан => 'not configured', rc=1"
 }
 
+# --- Phase 0: спайк привилегий CGI (yandex-disk diag) -----------------------
+# diag печатает euid процесса (= euid CGI при вызове из webman) и проверяет,
+# может ли этот euid писать конфиги пакета. Вердикт WRITABLE => ветка A (обёртка
+# пишет напрямую), NOT-WRITABLE => ветка B (нужен привилегированный посредник).
+# Сценарии изолированы (свой YD_HOME/YD_VAR), от порядка не зависят.
+
+t24_diag_writable() {
+    T=T24
+    h="$WORK/t24home"; v="$WORK/t24var"
+    # Каталоги конфигов существуют и доступны на запись => обе пробы успешны.
+    mkdir -p "$h/.config/rclone" "$h/.config/yandex-disk"
+    out=$(YD_HOME="$h" YD_VAR="$v" YD_RCLONE_CONF="$h/.config/rclone/rclone.conf" \
+          sh "$YD" diag) || fail "diag exit $? (ожидался 0)"
+    case "$out" in *"whoami:"*) ;; *) fail "diag не вывел whoami (euid процесса)";; esac
+    case "$out" in *"euid:"*)   ;; *) fail "diag не вывел euid";; esac
+    case "$out" in *"Вердикт: WRITABLE"*) ;; *) fail "обе папки доступны на запись, ожидался WRITABLE: $out";; esac
+    case "$out" in *"NOT-WRITABLE"*) fail "ложный NOT-WRITABLE при доступных папках";; *) ;; esac
+    # Проба не должна оставлять после себя файлов в каталогах конфигов.
+    rem=$(find "$h/.config" -name '.yd-probe.*' 2>/dev/null)
+    [ -z "$rem" ] || fail "diag оставил пробный файл(ы): $rem"
+    ok "diag: обе папки доступны => WRITABLE (ветка A), euid выведен, пробные файлы убраны"
+}
+
+t25_diag_not_writable() {
+    T=T25
+    h="$WORK/t25home"
+    # .config — обычный ФАЙЛ: ни один целевой каталог не создаётся (ENOTDIR даже
+    # для root) => обе пробы неуспешны, root-устойчиво (не полагается на chmod).
+    mkdir -p "$h"
+    : > "$h/.config"
+    # Захватываем stderr ОТДЕЛЬНО: неудачная проба не должна сыпать сырой ошибкой
+    # оболочки ("cannot create … Directory nonexistent") — diag.cgi зовёт нас с
+    # 2>&1, иначе шум попал бы в браузер.
+    err="$WORK/t25.err"
+    out=$(YD_HOME="$h" YD_VAR="$WORK/t25var" YD_RCLONE_CONF="$h/.config/rclone/rclone.conf" \
+          sh "$YD" diag 2>"$err") || fail "diag exit $? (ожидался 0 даже при отказе записи)"
+    case "$out" in *"Вердикт: NOT-WRITABLE"*) ;; *) fail "запись недоступна, ожидался NOT-WRITABLE: $out";; esac
+    case "$out" in *"запись: НЕТ"*) ;; *) fail "нет строки 'запись: НЕТ' при отказе";; esac
+    case "$out" in *"WRITABLE — применима ветка A"*) fail "ложный WRITABLE при отказе записи";; *) ;; esac
+    [ ! -s "$err" ] || fail "diag сыпет в stderr при отказе записи: $(cat "$err")"
+    ok "diag: запись в home/.config невозможна => NOT-WRITABLE (ветка B), stderr чист"
+}
+
+t26_diag_no_secret_leak() {
+    T=T26
+    h="$WORK/t26home"; v="$WORK/t26var"
+    mkdir -p "$h/.config/rclone" "$h/.config/yandex-disk"
+    # rclone.conf с СЕКРЕТОМ-сентинелом: diag НИКОГДА не должен его прочитать/вывести
+    # (инвариант безопасности CLAUDE.md — токен не в stdout/лог/ответ).
+    secret="ya29.SENTINEL-SECRET-TOKEN-DO-NOT-LEAK"
+    printf '[yandexdisk]\ntype = yandex\ntoken = {"access_token":"%s"}\n' "$secret" \
+        > "$h/.config/rclone/rclone.conf"
+    out=$(YD_HOME="$h" YD_VAR="$v" YD_RCLONE_CONF="$h/.config/rclone/rclone.conf" \
+          sh "$YD" diag) || fail "diag exit $?"
+    case "$out" in *"$secret"*) fail "СЕКРЕТ утёк в вывод diag — нарушение инварианта безопасности";; *) ;; esac
+    ok "diag: секрет из rclone.conf отсутствует в выводе (не читается)"
+}
+
+t27_diag_cgi_delegates() {
+    T=T27
+    bindir="$WORK/t27bin"; h="$WORK/t27home"; v="$WORK/t27var"
+    mkdir -p "$bindir" "$h/.config/rclone" "$h/.config/yandex-disk"
+    # PATH-шим `yandex-disk`: запускает настоящую обёртку с тестовым YD_*-окружением,
+    # так diag.cgi (зовёт bare `yandex-disk diag`) проверяется как на NAS.
+    {
+        printf '#!/bin/sh\n'
+        printf 'export YD_HOME="%s" YD_VAR="%s" YD_RCLONE_CONF="%s" RCLONE="%s"\n' \
+            "$h" "$v" "$h/.config/rclone/rclone.conf" "$RCLONE"
+        printf 'exec sh "%s" "$@"\n' "$YD"
+    } > "$bindir/yandex-disk"
+    chmod +x "$bindir/yandex-disk"
+    out=$(PATH="$bindir:$PATH" sh "$ROOT/spk/package/ui/scripts/diag.cgi") \
+        || fail "diag.cgi exit $?"
+    printf '%s\n' "$out" | head -1 | grep -qi '^Content-Type: text/plain' \
+        || fail "diag.cgi не отдал заголовок Content-Type: text/plain"
+    case "$out" in *"Вердикт:"*) ;; *) fail "diag.cgi не делегировал в 'yandex-disk diag' (нет вердикта)";; esac
+    ok "diag.cgi: тонкий CGI отдаёт text/plain и делегирует в обёртку yandex-disk diag"
+}
+
 # --- Golden-снимки наблюдаемого контракта (test/golden/) --------------------
 # Фиксируют ТОЧНЫЙ человекочитаемый вывод, который видят пользователь и UI.
 # Переменные части нормализуются: путь WORK -> <WORK>, таймстемп -> <TS>.
@@ -403,6 +485,14 @@ t23_configured_needs_section() {
 norm() {
     sed -e "s#$WORK#<WORK>#g" \
         -e 's/[0-9][0-9]\.[0-9][0-9]\.[0-9][0-9][0-9][0-9] - [0-9][0-9]:[0-9][0-9]:[0-9][0-9]/<TS>/g'
+}
+
+# Как norm(), но дополнительно гасит машинно-зависимые строки diag (имя/uid/euid
+# исполняющего пользователя), оставляя детерминированными каркас и вердикт.
+norm_diag() {
+    norm | sed -e 's/^whoami:.*$/whoami: <U>/' \
+               -e 's/^id:.*$/id: <ID>/' \
+               -e 's/^euid:.*$/euid: <N>/'
 }
 
 golden_cmp() {
@@ -446,6 +536,16 @@ g04_state_line_3field() {
     golden_cmp state-line-3field.txt "$WORK/actual"
 }
 
+g05_diag_not_writable() {
+    T=G5
+    h="$WORK/g5home"
+    mkdir -p "$h"
+    : > "$h/.config"   # .config — файл => целевые каталоги не создаются (детерминированно)
+    YD_HOME="$h" YD_VAR="$WORK/g5var" YD_RCLONE_CONF="$h/.config/rclone/rclone.conf" \
+        sh "$YD" diag | norm_diag > "$WORK/actual"
+    golden_cmp diag-not-writable.txt "$WORK/actual"
+}
+
 echo "== Герметичный прогон: fake-rclone + YD_*-оверрайды (WORK=$WORK) =="
 t01_first_run_resync
 t02_counter_window
@@ -470,9 +570,14 @@ t20_clean_thumbs
 t21_first_run_resync_fail
 t22_setup_output
 t23_configured_needs_section
+t24_diag_writable
+t25_diag_not_writable
+t26_diag_no_secret_leak
+t27_diag_cgi_delegates
 g01_status_configured
 g02_status_unconfigured
 g03_state_line_7field
 g04_state_line_3field
+g05_diag_not_writable
 
 echo "ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ"
