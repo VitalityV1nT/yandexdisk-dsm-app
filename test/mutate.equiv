@@ -28,5 +28,5 @@ spk/package/yandex-disk:145:ret:0>1      # count_run_transfers(): финальн
 spk/package/yandex-disk:97:logic:and>or  # maybe_clean: LOCAL всегда каталог (sync делает mkdir -p)
 spk/package/yandex-disk:161:logic:and>or # косметический ведущий перевод строки перед заголовком лога
 spk/package/yandex-disk:174:logic:and>or # _out пуст в герметике (fake-rclone пишет в --log-file, не в stdout)
-spk/package/yandex-disk:205:logic:and>or # косметический ведущий перевод строки перед записью skip
-spk/package/yandex-disk:247:logic:or>and # ветка read недостижима без tty ([ -t 0 ] ложно)
+spk/package/yandex-disk:227:logic:and>or # косметический ведущий перевод строки перед записью skip
+spk/package/yandex-disk:269:logic:or>and # ветка read недостижима без tty ([ -t 0 ] ложно)

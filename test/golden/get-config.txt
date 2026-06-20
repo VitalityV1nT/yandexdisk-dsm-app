@@ -1,0 +1,4 @@
+dir=<WORK>/g6local
+remote=yandexdisk:
+clean_thumbs=0
+token_configured=1

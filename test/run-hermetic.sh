@@ -68,6 +68,15 @@ state_line_probe() {
     YD_VAR="$1" sh -c '. "$1"; sync_state_line' probe "$ROOT/spk/package/common.sh"
 }
 
+# Вызвать функцию-хелпер common.sh напрямую: common_probe <func> [args...].
+# Аргументы передаются как есть (токен/путь со спецсимволами не ломается). YD_HOME/
+# YD_RCLONE_CONF пробрасываются явно (sh — внешняя команда => экспорт работает), так
+# что is_token_configured видит нужный rclone.conf без глобального стейта.
+common_probe() {
+    YD_HOME="${YD_HOME:-}" YD_RCLONE_CONF="${YD_RCLONE_CONF:-}" \
+        sh -c '. "$1"; shift; "$@"' probe "$ROOT/spk/package/common.sh" "$@"
+}
+
 t01_first_run_resync() {
     T=T1
     clean_start
@@ -313,7 +322,8 @@ t18_subcommand_routing() {
     rc=0; out=$(sh "$YD" frobnicate 2>&1) || rc=$?
     [ "$rc" = 1 ] || fail "неизвестная подкоманда: rc=$rc, ожидался 1"
     case "$out" in *"Usage: yandex-disk"*) ;; *) fail "нет 'Usage:' для неизвестной подкоманды";; esac
-    ok "роутинг: version/rclone -> движок, start|stop -> no-daemon, неизвестная -> usage rc=1"
+    case "$out" in *"set-folder"*) ;; *) fail "usage не упоминает UI-подкоманды (set-folder) — план §5";; esac
+    ok "роутинг: version/rclone -> движок, start|stop -> no-daemon, неизвестная -> usage rc=1 (с UI-подкомандами)"
 }
 
 t19_rotate_boundary() {
@@ -478,6 +488,216 @@ t27_diag_cgi_delegates() {
     ok "diag.cgi: тонкий CGI отдаёт text/plain и делегирует в обёртку yandex-disk diag"
 }
 
+# --- Phase 1: настройка пакета из UI (set-folder/set-token/get-config/check-folder) ---
+# Ядро без UI: валидация §3.4, атомарная запись config.cfg/rclone.conf (ветка A,
+# прямой INI, §11.4), преднаполнение формы, проверка папки. Хелперы проверяются и
+# напрямую (common_probe), и через подкоманды обёртки. Инвариант безопасности: токен
+# НИКОГДА не в stdout. Все сценарии изолированы (свой YD_HOME/YD_VAR) и root-устойчивы.
+
+t28_validate_dir() {
+    T=T28
+    rc=0; common_probe validate_dir "/volume1/Фото и видео" || rc=$?
+    [ "$rc" = 0 ] || fail "validate_dir отверг валидный абсолютный путь с пробелом (rc=$rc)"
+    rc=0; common_probe validate_dir "relative/path" || rc=$?
+    [ "$rc" = 1 ] || fail "validate_dir принял относительный путь (rc=$rc)"
+    rc=0; common_probe validate_dir "$(printf '/a\nb')" || rc=$?
+    [ "$rc" = 1 ] || fail "validate_dir принял путь с переводом строки (rc=$rc)"
+    rc=0; common_probe validate_dir '/a"b' || rc=$?
+    [ "$rc" = 1 ] || fail "validate_dir принял путь с кавычкой — cfg() её срежет (rc=$rc)"
+    rc=0; common_probe validate_dir '/a #b' || rc=$?
+    [ "$rc" = 1 ] || fail "validate_dir принял путь с ' #' — cfg() срежет инлайн-комментарий (rc=$rc)"
+    ok "validate_dir: абсолютный с пробелом ок; относительный/перевод строки/кавычка/' #' отвергнуты"
+}
+
+t29_validate_remote() {
+    T=T29
+    for good in "yandexdisk:" "yandexdisk:/Photos" "my_disk-2:" "yandexdisk:/a/b c"; do
+        rc=0; common_probe validate_remote "$good" || rc=$?
+        [ "$rc" = 0 ] || fail "validate_remote отверг валидный '$good' (rc=$rc)"
+    done
+    for bad in "yandexdisk" "yandexdisk:Photos" ":onlycolon" "bad name:"; do
+        rc=0; common_probe validate_remote "$bad" || rc=$?
+        [ "$rc" = 1 ] || fail "validate_remote принял невалидный '$bad' (rc=$rc)"
+    done
+    ok "validate_remote: NAME:/NAME:/subpath ок; без ':' / NAME:path-без-слэша / пробел в имени отвергнуты"
+}
+
+t30_validate_token() {
+    T=T30
+    secret="ya29.SENTINEL-DO-NOT-LEAK"
+    rc=0; common_probe validate_token "{\"access_token\":\"$secret\",\"token_type\":\"OAuth\"}" || rc=$?
+    [ "$rc" = 0 ] || fail "validate_token отверг валидный JSON-токен (rc=$rc)"
+    rc=0; common_probe validate_token "not-json" || rc=$?
+    [ "$rc" = 1 ] || fail "validate_token принял не-JSON (rc=$rc)"
+    rc=0; common_probe validate_token '{"token_type":"OAuth"}' || rc=$?
+    [ "$rc" = 1 ] || fail "validate_token принял JSON без access_token (rc=$rc)"
+    rc=0; common_probe validate_token '{"access_token":""}' || rc=$?
+    [ "$rc" = 1 ] || fail "validate_token принял пустой access_token (rc=$rc)"
+    ok "validate_token: валидный JSON ок; не-JSON / без access_token / пустой токен отвергнуты"
+}
+
+t31_is_token_configured() {
+    T=T31
+    h="$WORK/t31home"; mkdir -p "$h/.config/rclone"
+    conf="$h/.config/rclone/rclone.conf"
+    rc=0; YD_RCLONE_CONF="$conf" common_probe is_token_configured || rc=$?
+    [ "$rc" = 1 ] || fail "is_token_configured=true при ОТСУТСТВУЮЩЕМ rclone.conf (rc=$rc)"
+    : > "$conf"   # файл есть, но без секции [yandexdisk]
+    rc=0; YD_RCLONE_CONF="$conf" common_probe is_token_configured || rc=$?
+    [ "$rc" = 1 ] || fail "is_token_configured=true при conf без секции [yandexdisk] (rc=$rc)"
+    printf '[yandexdisk]\ntype = yandex\n' > "$conf"
+    rc=0; YD_RCLONE_CONF="$conf" common_probe is_token_configured || rc=$?
+    [ "$rc" = 0 ] || fail "is_token_configured=false при наличии секции [yandexdisk] (rc=$rc)"
+    ok "is_token_configured: нет файла/нет секции => false; есть [yandexdisk] => true"
+}
+
+t32_set_folder_writes() {
+    T=T32
+    h="$WORK/t32home"; v="$WORK/t32var"; loc="$WORK/t32local"
+    mkdir -p "$h/.config/yandex-disk" "$loc"
+    cfgf="$h/.config/yandex-disk/config.cfg"
+    out=$(YD_HOME="$h" YD_VAR="$v" YD_RCLONE_CONF="$h/.config/rclone/rclone.conf" \
+          sh "$YD" set-folder "$loc" "yandexdisk:/Backup" 1) \
+        || fail "set-folder exit $? (ожидался 0)"
+    case "$out" in *"OK:"*) ;; *) fail "set-folder не подтвердил запись: $out";; esac
+    [ -f "$cfgf" ] || fail "set-folder не создал config.cfg"
+    # Значения читаются обратно через cfg() из common.sh — round-trip контракта config.cfg.
+    [ "$(cfg_probe "$h" dir)" = "$loc" ]              || fail "dir в config.cfg неверен: $(cfg_probe "$h" dir)"
+    [ "$(cfg_probe "$h" remote)" = "yandexdisk:/Backup" ] || fail "remote неверен: $(cfg_probe "$h" remote)"
+    [ "$(cfg_probe "$h" clean_thumbs)" = 1 ]          || fail "clean_thumbs неверен: $(cfg_probe "$h" clean_thumbs)"
+    # Режим 0644 и отсутствие временного файла рядом (атомарность записи).
+    perm=$(ls -l "$cfgf" | awk 'NR==1{print $1}')
+    case "$perm" in -rw-r--r--*) ;; *) fail "config.cfg режим не 0644: $perm";; esac
+    rem=$(find "$h/.config/yandex-disk" -name '.yd-write.*' 2>/dev/null)
+    [ -z "$rem" ] || fail "set-folder оставил временный файл: $rem"
+    ok "set-folder: config.cfg записан (dir/remote/clean_thumbs round-trip), режим 0644, temp убран"
+}
+
+t33_set_folder_rejects() {
+    T=T33
+    h="$WORK/t33home"; v="$WORK/t33var"; x="$WORK/t33home/x"
+    mkdir -p "$h/.config/yandex-disk"
+    rc=0; YD_HOME="$h" YD_VAR="$v" YD_RCLONE_CONF="$x" sh "$YD" set-folder "rel/dir" >/dev/null 2>&1 || rc=$?
+    [ "$rc" = 2 ] || fail "относительный dir: rc=$rc, ожидался 2"
+    rc=0; YD_HOME="$h" YD_VAR="$v" YD_RCLONE_CONF="$x" sh "$YD" set-folder "/ok" "bad name" >/dev/null 2>&1 || rc=$?
+    [ "$rc" = 2 ] || fail "невалидный remote: rc=$rc, ожидался 2"
+    rc=0; YD_HOME="$h" YD_VAR="$v" YD_RCLONE_CONF="$x" sh "$YD" set-folder "/ok" "yandexdisk:" 7 >/dev/null 2>&1 || rc=$?
+    [ "$rc" = 2 ] || fail "невалидный clean_thumbs=7: rc=$rc, ожидался 2"
+    [ ! -f "$h/.config/yandex-disk/config.cfg" ] || fail "config.cfg записан при отказе валидации"
+    ok "set-folder отвергает относительный dir / плохой remote / clean_thumbs!=0|1 (rc=2), config.cfg не тронут"
+}
+
+t34_set_folder_write_fail() {
+    T=T34
+    h="$WORK/t34home"; mkdir -p "$h"
+    # .config — ФАЙЛ => mkdir .config/yandex-disk невозможен (ENOTDIR даже для root),
+    # write_cfg_atomic вернёт 1 => set-folder exit 1. Не полагается на права (root-устойчиво).
+    : > "$h/.config"
+    rc=0
+    out=$(YD_HOME="$h" YD_VAR="$WORK/t34var" YD_RCLONE_CONF="$h/.config/rclone/rclone.conf" \
+          sh "$YD" set-folder "/ok" "yandexdisk:" 0 2>&1) || rc=$?
+    [ "$rc" = 1 ] || fail "ENOTDIR при записи config.cfg: rc=$rc, ожидался 1"
+    case "$out" in *"could not write"*) ;; *) fail "нет понятного сообщения об ошибке записи: $out";; esac
+    ok "set-folder: запись config.cfg невозможна (ENOTDIR) => exit 1, понятная ошибка"
+}
+
+t35_set_token_writes() {
+    T=T35
+    h="$WORK/t35home"; v="$WORK/t35var"
+    mkdir -p "$h/.config/rclone"
+    conf="$h/.config/rclone/rclone.conf"
+    secret="ya29.SENTINEL-SECRET-DO-NOT-LEAK"
+    out=$(printf '{"access_token":"%s","token_type":"OAuth"}' "$secret" \
+          | YD_HOME="$h" YD_VAR="$v" YD_RCLONE_CONF="$conf" sh "$YD" set-token) \
+        || fail "set-token exit $? (ожидался 0)"
+    case "$out" in *"$secret"*) fail "СЕКРЕТ утёк в stdout set-token — нарушение инварианта";; *) ;; esac
+    [ -f "$conf" ] || fail "set-token не создал rclone.conf"
+    grep -q '^\[yandexdisk\]' "$conf" || fail "в rclone.conf нет секции [yandexdisk]"
+    grep -q "$secret" "$conf"          || fail "токен не записан в rclone.conf"
+    perm=$(ls -l "$conf" | awk 'NR==1{print $1}')
+    case "$perm" in -rw-------*) ;; *) fail "rclone.conf режим не 0600: $perm";; esac
+    rem=$(find "$h/.config/rclone" -name '.yd-write.*' 2>/dev/null)
+    [ -z "$rem" ] || fail "set-token оставил временный файл: $rem"
+    ok "set-token: rclone.conf [yandexdisk]+токен, режим 0600, секрет НЕ в stdout, temp убран"
+}
+
+t36_set_token_rejects() {
+    T=T36
+    h="$WORK/t36home"; v="$WORK/t36var"
+    mkdir -p "$h/.config/rclone"
+    conf="$h/.config/rclone/rclone.conf"
+    rc=0
+    out=$(printf 'this is not a token' \
+          | YD_HOME="$h" YD_VAR="$v" YD_RCLONE_CONF="$conf" sh "$YD" set-token 2>&1) || rc=$?
+    [ "$rc" = 2 ] || fail "не-JSON токен: rc=$rc, ожидался 2"
+    [ ! -f "$conf" ] || fail "rclone.conf записан при отказе валидации токена"
+    # Запись rclone.conf невозможна (ENOTDIR) при ВАЛИДНОМ токене => exit 1 (без утечки секрета).
+    h2="$WORK/t36home2"; mkdir -p "$h2"; : > "$h2/.config"
+    rc=0
+    out=$(printf '{"access_token":"ya29.X"}' \
+          | YD_HOME="$h2" YD_VAR="$WORK/t36var2" YD_RCLONE_CONF="$h2/.config/rclone/rclone.conf" \
+            sh "$YD" set-token 2>&1) || rc=$?
+    [ "$rc" = 1 ] || fail "ENOTDIR при записи rclone.conf: rc=$rc, ожидался 1"
+    case "$out" in *"could not write"*) ;; *) fail "нет сообщения об ошибке записи rclone.conf: $out";; esac
+    case "$out" in *"ya29.X"*) fail "СЕКРЕТ утёк в сообщение об ошибке set-token";; *) ;; esac
+    ok "set-token отвергает не-JSON (rc=2, conf не тронут); ENOTDIR => exit 1 без утечки секрета"
+}
+
+t37_get_config() {
+    T=T37
+    # (a) Полностью настроенный пакет: dir/remote/clean_thumbs + токен в rclone.conf.
+    h="$WORK/t37home"; v="$WORK/t37var"; loc="$WORK/t37local"
+    mkdir -p "$h/.config/rclone" "$h/.config/yandex-disk" "$loc"
+    conf="$h/.config/rclone/rclone.conf"
+    secret="ya29.SENTINEL-DO-NOT-LEAK-GETCONFIG"
+    printf '[yandexdisk]\ntype = yandex\ntoken = {"access_token":"%s"}\n' "$secret" > "$conf"
+    printf 'dir="%s"\nremote="yandexdisk:/Sub"\nclean_thumbs=1\n' "$loc" > "$h/.config/yandex-disk/config.cfg"
+    out=$(YD_HOME="$h" YD_VAR="$v" YD_RCLONE_CONF="$conf" sh "$YD" get-config) || fail "get-config exit $?"
+    case "$out" in *"$secret"*) fail "СЕКРЕТ утёк в вывод get-config — нарушение инварианта";; *) ;; esac
+    printf '%s\n' "$out" | grep -qx "dir=$loc"               || fail "get-config: нет 'dir=$loc': $out"
+    printf '%s\n' "$out" | grep -qx "remote=yandexdisk:/Sub" || fail "get-config: неверный remote: $out"
+    printf '%s\n' "$out" | grep -qx "clean_thumbs=1"         || fail "get-config: неверный clean_thumbs: $out"
+    printf '%s\n' "$out" | grep -qx "token_configured=1"     || fail "get-config: token_configured!=1 при секции: $out"
+    # (b) Обратная совместимость: старый config.cfg ТОЛЬКО с dir, без rclone.conf =>
+    # remote подставлен по умолчанию, токен не настроен, ошибок нет.
+    h2="$WORK/t37home2"; mkdir -p "$h2/.config/yandex-disk"
+    printf 'dir="/legacy"\n' > "$h2/.config/yandex-disk/config.cfg"
+    out=$(YD_HOME="$h2" YD_VAR="$WORK/t37var2" YD_RCLONE_CONF="$h2/.config/rclone/rclone.conf" \
+          sh "$YD" get-config) || fail "get-config (старый формат) exit $?"
+    printf '%s\n' "$out" | grep -qx "dir=/legacy"          || fail "старый формат: нет dir=/legacy: $out"
+    printf '%s\n' "$out" | grep -qx "remote=yandexdisk:"   || fail "старый формат: remote не по умолчанию: $out"
+    printf '%s\n' "$out" | grep -qx "token_configured=0"   || fail "старый формат: token_configured!=0 без rclone.conf: $out"
+    ok "get-config: настроенный => поля+token_configured=1, секрет НЕ в выводе; старый config.cfg => дефолт remote, token=0"
+}
+
+t38_check_folder() {
+    T=T38
+    base="$WORK/t38"; mkdir -p "$base/realdir"; : > "$base/afile"
+    e_h="$WORK/t38home"; e_v="$WORK/t38var"; e_c="$WORK/t38home/x"
+    # (a) существующий каталог с правом записи => exists=1, writable=1, есть owner.
+    out=$(YD_HOME="$e_h" YD_VAR="$e_v" YD_RCLONE_CONF="$e_c" sh "$YD" check-folder "$base/realdir") \
+        || fail "check-folder(dir) exit $?"
+    printf '%s\n' "$out" | grep -qx "exists=1"   || fail "realdir: нет exists=1: $out"
+    printf '%s\n' "$out" | grep -qx "writable=1" || fail "realdir: нет writable=1: $out"
+    printf '%s\n' "$out" | grep -q  "^owner="    || fail "realdir: нет строки owner=: $out"
+    # (b) путь существует, но это ФАЙЛ (не каталог) => writable=0. root-устойчиво и
+    # убивает мутант '&&'->'||' в [ -d ] && [ -w ] (для файла -d ложно, -w истинно).
+    out=$(YD_HOME="$e_h" YD_VAR="$e_v" YD_RCLONE_CONF="$e_c" sh "$YD" check-folder "$base/afile") \
+        || fail "check-folder(file) exit $?"
+    printf '%s\n' "$out" | grep -qx "exists=1"   || fail "afile: нет exists=1: $out"
+    printf '%s\n' "$out" | grep -qx "writable=0" || fail "afile (не каталог): нет writable=0: $out"
+    # (c) несуществующий путь => exists=0, writable=0, owner=?.
+    out=$(YD_HOME="$e_h" YD_VAR="$e_v" YD_RCLONE_CONF="$e_c" sh "$YD" check-folder "$base/nope") \
+        || fail "check-folder(absent) exit $?"
+    printf '%s\n' "$out" | grep -qx "exists=0"   || fail "nope: нет exists=0: $out"
+    printf '%s\n' "$out" | grep -qx "writable=0" || fail "nope: нет writable=0: $out"
+    printf '%s\n' "$out" | grep -qx "owner=?"    || fail "nope: owner!=? : $out"
+    # (d) без аргумента => usage, rc=2.
+    rc=0; YD_HOME="$e_h" YD_VAR="$e_v" YD_RCLONE_CONF="$e_c" sh "$YD" check-folder >/dev/null 2>&1 || rc=$?
+    [ "$rc" = 2 ] || fail "check-folder без аргумента: rc=$rc, ожидался 2"
+    ok "check-folder: каталог=>exists/writable=1; файл=>writable=0; отсутствует=>0/0/owner=?; без арг=>rc2"
+}
+
 # --- Golden-снимки наблюдаемого контракта (test/golden/) --------------------
 # Фиксируют ТОЧНЫЙ человекочитаемый вывод, который видят пользователь и UI.
 # Переменные части нормализуются: путь WORK -> <WORK>, таймстемп -> <TS>.
@@ -546,6 +766,20 @@ g05_diag_not_writable() {
     golden_cmp diag-not-writable.txt "$WORK/actual"
 }
 
+g06_get_config() {
+    T=G6
+    h="$WORK/g6home"; v="$WORK/g6var"; loc="$WORK/g6local"
+    mkdir -p "$h/.config/rclone" "$h/.config/yandex-disk" "$loc"
+    # Токен-сентинел в conf: golden фиксирует, что get-config его НЕ печатает.
+    printf '[yandexdisk]\ntype = yandex\ntoken = {"access_token":"SENTINEL"}\n' \
+        > "$h/.config/rclone/rclone.conf"
+    printf 'dir="%s"\nremote="yandexdisk:"\nclean_thumbs=0\n' "$loc" \
+        > "$h/.config/yandex-disk/config.cfg"
+    YD_HOME="$h" YD_VAR="$v" YD_RCLONE_CONF="$h/.config/rclone/rclone.conf" \
+        sh "$YD" get-config | norm > "$WORK/actual"
+    golden_cmp get-config.txt "$WORK/actual"
+}
+
 echo "== Герметичный прогон: fake-rclone + YD_*-оверрайды (WORK=$WORK) =="
 t01_first_run_resync
 t02_counter_window
@@ -574,10 +808,22 @@ t24_diag_writable
 t25_diag_not_writable
 t26_diag_no_secret_leak
 t27_diag_cgi_delegates
+t28_validate_dir
+t29_validate_remote
+t30_validate_token
+t31_is_token_configured
+t32_set_folder_writes
+t33_set_folder_rejects
+t34_set_folder_write_fail
+t35_set_token_writes
+t36_set_token_rejects
+t37_get_config
+t38_check_folder
 g01_status_configured
 g02_status_unconfigured
 g03_state_line_7field
 g04_state_line_3field
 g05_diag_not_writable
+g06_get_config
 
 echo "ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ"

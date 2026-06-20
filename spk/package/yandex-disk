@@ -310,6 +310,86 @@ case "${1:-}" in
         exit 0
         ;;
 
+    set-folder)
+        # UI «Настройки»: проверить и АТОМАРНО (пере)записать config.cfg. Пишем только
+        # документированные ключи dir/remote/clean_thumbs; правила валидации — план §3.4.
+        # Подкоманду запускают со сбросом привилегий до sc-yandexdisk (план §11.1), так что
+        # файл сразу принадлежит пользователю пакета. Логика — в common.sh (single source).
+        _dir="${2:-}"; _remote="${3:-yandexdisk:}"; _ct="${4:-0}"
+        validate_dir "$_dir" \
+            || { echo "Error: dir must be an absolute path without a newline, a '\"' or a ' #'" >&2; exit 2; }
+        validate_remote "$_remote" \
+            || { echo "Error: remote must look like NAME: or NAME:/subpath" >&2; exit 2; }
+        case "$_ct" in
+            0|1) ;;
+            *) echo "Error: clean_thumbs must be 0 or 1" >&2; exit 2 ;;
+        esac
+        {
+            echo '# Yandex Disk (ARM) — written by the package UI (yandex-disk set-folder).'
+            echo '# Sync PERIOD is set in DSM Task Scheduler, not here.'
+            echo '# clean_thumbs=1 deletes local Thumbs.db/.DS_Store after each sync.'
+            printf 'dir="%s"\n' "$_dir"
+            printf 'remote="%s"\n' "$_remote"
+            printf 'clean_thumbs=%s\n' "$_ct"
+        } | write_cfg_atomic "$CONFIG_FILE" 0644 \
+            || { echo "Error: could not write $CONFIG_FILE" >&2; exit 1; }
+        echo "OK: folder settings saved"
+        exit 0
+        ;;
+
+    set-token)
+        # UI «Настройки»: JSON-токен OAuth приходит со STDIN (НИКОГДА не argv — иначе
+        # виден в `ps` другим процессам). Пишется напрямую в rclone.conf как INI
+        # (план §11.4: ветка A, прямой INI), режим 0600, атомарно. Секрет НЕ печатается
+        # в stdout и НЕ логируется (инвариант CLAUDE.md).
+        _json=$(cat)
+        validate_token "$_json" \
+            || { echo "Error: stdin must be the JSON token from 'rclone authorize \"yandex\"' (with access_token)" >&2; exit 2; }
+        printf '[yandexdisk]\ntype = yandex\ntoken = %s\n' "$_json" \
+            | write_cfg_atomic "$RCLONE_CONF" 0600 \
+            || { echo "Error: could not write rclone.conf" >&2; exit 1; }
+        echo "OK: Yandex Disk token saved"
+        exit 0
+        ;;
+
+    get-config)
+        # UI-преднаполнение формы: текущий конфиг в машиночитаемом виде key=value.
+        # Значение токена НЕ выводится — только флаг token_configured (план §3.5).
+        # Старый config.cfg (без новых ключей) читается без ошибок: cfg() возвращает
+        # пустую строку, remote подставляется по умолчанию (обратная совместимость).
+        printf 'dir=%s\n' "$(cfg dir)"
+        _r=$(cfg remote); [ -n "$_r" ] || _r="yandexdisk:"
+        printf 'remote=%s\n' "$_r"
+        printf 'clean_thumbs=%s\n' "$(cfg clean_thumbs)"
+        if is_token_configured; then
+            echo "token_configured=1"
+        else
+            echo "token_configured=0"
+        fi
+        exit 0
+        ;;
+
+    check-folder)
+        # UI: существует ли <dir>, является ли он каталогом с правом записи, и владелец —
+        # чтобы форма показала подсказку про права общей папки (§1) БЕЗ SSH. Только чтение
+        # (никаких изменений ФС), безопасно дёргать на каждое открытие формы.
+        _dir="${2:-}"
+        [ -n "$_dir" ] || { echo "Error: usage: yandex-disk check-folder <dir>" >&2; exit 2; }
+        if [ -e "$_dir" ]; then
+            echo "exists=1"
+        else
+            echo "exists=0"
+        fi
+        if [ -d "$_dir" ] && [ -w "$_dir" ]; then
+            echo "writable=1"
+        else
+            echo "writable=0"
+        fi
+        _owner=$(ls -ld "$_dir" 2>/dev/null | awk 'NR==1{print $3}')
+        printf 'owner=%s\n' "${_owner:-?}"
+        exit 0
+        ;;
+
     version|--version|-v)
         "$RCLONE" version
         exit $?
@@ -329,6 +409,8 @@ case "${1:-}" in
 
     *)
         echo "Usage: yandex-disk {sync|status|setup|diag|version|rclone <args...>}"
+        echo "       yandex-disk {set-folder <dir> [remote] [clean_thumbs]|set-token|get-config|check-folder <dir>}"
+        echo "  set-folder/set-token/get-config/check-folder back the DSM UI (no SSH); set-token reads token JSON from stdin."
         echo "Periodic sync is configured in DSM Task Scheduler (runs 'yandex-disk sync')."
         exit 1
         ;;
