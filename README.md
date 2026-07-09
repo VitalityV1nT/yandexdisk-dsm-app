@@ -22,6 +22,9 @@
 - Устройства **x86_64**  
 - Доступ по **SSH** для первоначальной настройки
 
+> [!NOTE]
+> **Rclone based** [форк этого проекта](https://github.com/volkovpv/yandexdisk-dsm-app) от [Пётр Волков](https://github.com/volkovpv) для **ARM** устройств
+
 ---
 
 ## 🔧 УСТАНОВКА
